@@ -77,7 +77,10 @@ def upload_to_drive(file_path, file_name, solicitacao, escola):
     pasta_nome = get_or_create_folder(solicitacao, pasta_solic)
     pasta_escola = get_or_create_folder(escola, pasta_nome)
 
-    media = MediaFileUpload(file_path, resumable=True)
+    media = MediaFileUpload(
+        file_path,
+        resumable=False
+    )
 
     metadata = {
         "name": file_name,
@@ -88,7 +91,8 @@ def upload_to_drive(file_path, file_name, solicitacao, escola):
         body=metadata,
         media_body=media,
         fields="id, webViewLink",
-        supportsAllDrives=True
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True
     ).execute()
 
     return uploaded["webViewLink"]
