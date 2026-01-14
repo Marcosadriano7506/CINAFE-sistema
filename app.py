@@ -8,7 +8,6 @@ from datetime import datetime
 
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
@@ -19,36 +18,30 @@ app = Flask(__name__)
 app.secret_key = "cinafe_secret_key"
 
 # ==================================================
-# GOOGLE DRIVE - OAUTH
+# GOOGLE DRIVE - OAUTH (RENDER SAFE)
 # ==================================================
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+
 CLIENT_SECRETS_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
-TOKEN_FILE = "token.json"
+GOOGLE_DRIVE_TOKEN = os.environ.get("GOOGLE_DRIVE_TOKEN")
 
 PASTA_ANO = "2026"
 PASTA_SOLICITACOES = "SOLICITACOES"
 
-
 # ==================================================
-# GOOGLE DRIVE FUNÇÕES
+# GOOGLE DRIVE FUNÇÕES (CORRIGIDO)
 # ==================================================
 def get_drive_service():
     if not CLIENT_SECRETS_JSON:
-        raise Exception("Credenciais OAuth não configuradas")
+        raise Exception("GOOGLE_CREDENTIALS_JSON não configurado")
 
-    creds = None
+    if not GOOGLE_DRIVE_TOKEN:
+        raise Exception("Google Drive não autorizado")
 
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            raise Exception("Google Drive não autorizado")
-
-        with open(TOKEN_FILE, "w") as token:
-            token.write(creds.to_json())
+    creds = Credentials.from_authorized_user_info(
+        json.loads(GOOGLE_DRIVE_TOKEN),
+        SCOPES
+    )
 
     return build("drive", "v3", credentials=creds)
 
@@ -108,7 +101,6 @@ def upload_to_drive(file_path, file_name, solicitacao, escola):
     ).execute()
 
     return uploaded["webViewLink"]
-
 
 # ==================================================
 # BANCO DE DADOS
@@ -221,7 +213,6 @@ def logout():
     session.clear()
     return redirect("/")
 
-
 # ==================================================
 # DASHBOARD
 # ==================================================
@@ -248,7 +239,6 @@ def dashboard():
         comunicados=comunicados
     )
 
-
 # ==================================================
 # COMUNICADOS
 # ==================================================
@@ -272,17 +262,7 @@ def novo_comunicado():
 
         return redirect("/dashboard")
 
-    return """
-        <h2>Novo Comunicado</h2>
-        <form method="POST">
-            <input name="titulo" placeholder="Título" required><br><br>
-            <textarea name="mensagem" placeholder="Mensagem" required></textarea><br><br>
-            <button>Publicar</button>
-        </form>
-        <br>
-        <a href="/dashboard">Voltar</a>
-    """
-
+    return render_template("novo_comunicado.html")
 
 # ==================================================
 # ADMIN - ESCOLAS E SOLICITAÇÕES
@@ -309,21 +289,9 @@ def criar_escola():
         conn.commit()
         conn.close()
 
-        return f"""
-            <h3>Escola cadastrada</h3>
-            <p>Login: {codigo}</p>
-            <p>Senha: {senha}</p>
-            <a href="/dashboard">Voltar</a>
-        """
+        return redirect("/dashboard")
 
-    return """
-        <h2>Cadastrar Escola</h2>
-        <form method="POST">
-            <input name="nome" placeholder="Nome da escola" required><br><br>
-            <input name="codigo" placeholder="Código da escola" required><br><br>
-            <button>Cadastrar</button>
-        </form>
-    """
+    return render_template("criar_escola.html")
 
 
 @app.route("/nova-solicitacao", methods=["GET", "POST"])
@@ -341,16 +309,7 @@ def nova_solicitacao():
         conn.close()
         return redirect("/dashboard")
 
-    return """
-        <h2>Nova Solicitação</h2>
-        <form method="POST">
-            <input name="titulo" placeholder="Título" required><br><br>
-            <textarea name="descricao" placeholder="Descrição" required></textarea><br><br>
-            <input type="date" name="prazo" required><br><br>
-            <button>Criar</button>
-        </form>
-    """
-
+    return render_template("nova_solicitacao.html")
 
 # ==================================================
 # CONTROLE DA SECRETARIA
@@ -406,7 +365,6 @@ def controle(id):
         resultado=resultado
     )
 
-
 # ==================================================
 # ESCOLA - ENVIO
 # ==================================================
@@ -453,19 +411,48 @@ def enviar(id):
         if fora_prazo:
             msg += " (FORA DO PRAZO)"
 
-        return f"""
-            <h3>{msg}</h3>
-            <a href="/dashboard">Voltar ao painel</a>
-        """
+        return render_template("sucesso.html", mensagem=msg)
 
     conn.close()
+    return render_template("enviar.html", solicitacao=solicitacao)
+
+# ==================================================
+# OAUTH GOOGLE
+# ==================================================
+@app.route("/autorizar-google")
+def autorizar_google():
+    flow = Flow.from_client_config(
+        json.loads(CLIENT_SECRETS_JSON),
+        scopes=SCOPES
+    )
+    flow.redirect_uri = "https://cinafe.onrender.com/oauth2callback"
+
+    auth_url, _ = flow.authorization_url(
+        access_type="offline",
+        prompt="consent"
+    )
+    return redirect(auth_url)
+
+
+@app.route("/oauth2callback")
+def oauth2callback():
+    flow = Flow.from_client_config(
+        json.loads(CLIENT_SECRETS_JSON),
+        scopes=SCOPES
+    )
+    flow.redirect_uri = "https://cinafe.onrender.com/oauth2callback"
+
+    flow.fetch_token(authorization_response=request.url)
+    creds = flow.credentials
 
     return f"""
-        <h2>Enviar Arquivo</h2>
-        <p><strong>Solicitação:</strong> {solicitacao['titulo']}</p>
-        <p><strong>Prazo:</strong> {solicitacao['prazo']}</p>
-        <form method="POST" enctype="multipart/form-data">
-            <input type="file" name="arquivo" required><br><br>
-            <button>Enviar</button>
-        </form>
+    <h2>Autorização concluída</h2>
+    <p>Copie TODO o conteúdo abaixo e cole na variável <b>GOOGLE_DRIVE_TOKEN</b> no Render:</p>
+    <textarea rows="15" cols="120">{creds.to_json()}</textarea>
     """
+
+# ==================================================
+# MAIN
+# ==================================================
+if __name__ == "__main__":
+    app.run()
