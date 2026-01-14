@@ -106,14 +106,29 @@ def criar_escola():
         codigo = request.form["codigo"]
 
         conn = get_db()
+
+        # Cadastra escola
         conn.execute(
             "INSERT INTO escolas (nome, codigo) VALUES (?, ?)",
             (nome, codigo)
         )
+
+        # Cria usuário da escola automaticamente
+        senha_inicial = generate_password_hash(codigo + "@123")
+        conn.execute(
+            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+            (codigo, senha_inicial, "escola")
+        )
+
         conn.commit()
         conn.close()
 
-        return "Escola cadastrada com sucesso"
+        return f"""
+            <h3>Escola cadastrada com sucesso</h3>
+            <p><strong>Login da escola:</strong> {codigo}</p>
+            <p><strong>Senha inicial:</strong> {codigo}@123</p>
+            <a href="/dashboard">Voltar ao painel</a>
+        """
 
     return """
         <h2>Cadastrar Escola</h2>
