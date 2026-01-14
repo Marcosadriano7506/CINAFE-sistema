@@ -29,7 +29,7 @@ PASTA_ANO = "2026"
 PASTA_SOLICITACOES = "SOLICITACOES"
 
 # ==================================================
-# GOOGLE DRIVE FUNÇÕES (CORRIGIDO)
+# GOOGLE DRIVE FUNÇÕES
 # ==================================================
 def get_drive_service():
     if not CLIENT_SECRETS_JSON:
@@ -63,19 +63,11 @@ def get_or_create_folder(name, parent_id=None):
     if files:
         return files[0]["id"]
 
-    metadata = {
-        "name": name,
-        "mimeType": "application/vnd.google-apps.folder"
-    }
-
+    metadata = {"name": name, "mimeType": "application/vnd.google-apps.folder"}
     if parent_id:
         metadata["parents"] = [parent_id]
 
-    folder = drive.files().create(
-        body=metadata,
-        fields="id"
-    ).execute()
-
+    folder = drive.files().create(body=metadata, fields="id").execute()
     return folder["id"]
 
 
@@ -89,10 +81,7 @@ def upload_to_drive(file_path, file_name, solicitacao, escola):
 
     media = MediaFileUpload(file_path, resumable=False)
 
-    metadata = {
-        "name": file_name,
-        "parents": [pasta_escola]
-    }
+    metadata = {"name": file_name, "parents": [pasta_escola]}
 
     uploaded = drive.files().create(
         body=metadata,
@@ -103,7 +92,7 @@ def upload_to_drive(file_path, file_name, solicitacao, escola):
     return uploaded["webViewLink"]
 
 # ==================================================
-# BANCO DE DADOS
+# BANCO
 # ==================================================
 def get_db():
     conn = sqlite3.connect("cinafe.db")
@@ -240,7 +229,7 @@ def dashboard():
     )
 
 # ==================================================
-# COMUNICADOS
+# COMUNICADOS (INLINE)
 # ==================================================
 @app.route("/novo-comunicado", methods=["GET", "POST"])
 def novo_comunicado():
@@ -262,10 +251,18 @@ def novo_comunicado():
 
         return redirect("/dashboard")
 
-    return render_template("novo_comunicado.html")
+    return """
+        <h2>Novo Comunicado</h2>
+        <form method="POST">
+            <input name="titulo" placeholder="Título" required><br><br>
+            <textarea name="mensagem" placeholder="Mensagem" required></textarea><br><br>
+            <button>Publicar</button>
+        </form>
+        <br><a href="/dashboard">Voltar</a>
+    """
 
 # ==================================================
-# ADMIN - ESCOLAS E SOLICITAÇÕES
+# ESCOLAS (INLINE)
 # ==================================================
 @app.route("/criar-escola", methods=["GET", "POST"])
 def criar_escola():
@@ -289,11 +286,26 @@ def criar_escola():
         conn.commit()
         conn.close()
 
-        return redirect("/dashboard")
+        return f"""
+            <h3>Escola cadastrada com sucesso</h3>
+            <p><b>Login:</b> {codigo}</p>
+            <p><b>Senha:</b> {senha}</p>
+            <a href="/dashboard">Voltar</a>
+        """
 
-    return render_template("criar_escola.html")
+    return """
+        <h2>Cadastrar Escola</h2>
+        <form method="POST">
+            <input name="nome" placeholder="Nome da escola" required><br><br>
+            <input name="codigo" placeholder="Código da escola" required><br><br>
+            <button>Cadastrar</button>
+        </form>
+        <br><a href="/dashboard">Voltar</a>
+    """
 
-
+# ==================================================
+# SOLICITAÇÕES (INLINE)
+# ==================================================
 @app.route("/nova-solicitacao", methods=["GET", "POST"])
 def nova_solicitacao():
     if session.get("role") != "admin":
@@ -309,64 +321,19 @@ def nova_solicitacao():
         conn.close()
         return redirect("/dashboard")
 
-    return render_template("nova_solicitacao.html")
+    return """
+        <h2>Nova Solicitação</h2>
+        <form method="POST">
+            <input name="titulo" placeholder="Título" required><br><br>
+            <textarea name="descricao" placeholder="Descrição" required></textarea><br><br>
+            <input type="date" name="prazo" required><br><br>
+            <button>Criar</button>
+        </form>
+        <br><a href="/dashboard">Voltar</a>
+    """
 
 # ==================================================
-# CONTROLE DA SECRETARIA
-# ==================================================
-@app.route("/controle/<int:id>")
-def controle(id):
-    if session.get("role") != "admin":
-        return redirect("/")
-
-    conn = get_db()
-
-    solicitacao = conn.execute(
-        "SELECT * FROM solicitacoes WHERE id=?", (id,)
-    ).fetchone()
-
-    escolas = conn.execute(
-        "SELECT codigo FROM escolas"
-    ).fetchall()
-
-    envios = conn.execute(
-        "SELECT * FROM envios WHERE solicitacao_id=?", (id,)
-    ).fetchall()
-
-    envios_dict = {e["escola"]: e for e in envios}
-
-    prazo = datetime.strptime(solicitacao["prazo"], "%Y-%m-%d")
-    hoje = datetime.now()
-
-    resultado = []
-
-    for escola in escolas:
-        codigo = escola["codigo"]
-
-        if codigo in envios_dict:
-            envio = datetime.strptime(envios_dict[codigo]["data_envio"], "%Y-%m-%d %H:%M")
-            status = "🟢 Enviado" if envio.date() <= prazo.date() else "🔴 Fora do prazo"
-            link = envios_dict[codigo]["link_drive"]
-        else:
-            status = "🟡 Pendente" if hoje.date() <= prazo.date() else "🔴 Em atraso"
-            link = None
-
-        resultado.append({
-            "escola": codigo,
-            "status": status,
-            "link": link
-        })
-
-    conn.close()
-
-    return render_template(
-        "controle.html",
-        solicitacao=solicitacao,
-        resultado=resultado
-    )
-
-# ==================================================
-# ESCOLA - ENVIO
+# ENVIO (ESCOLA)
 # ==================================================
 @app.route("/enviar/<int:id>", methods=["GET", "POST"])
 def enviar(id):
@@ -377,6 +344,7 @@ def enviar(id):
     solicitacao = conn.execute(
         "SELECT * FROM solicitacoes WHERE id=?", (id,)
     ).fetchone()
+
     prazo = datetime.strptime(solicitacao["prazo"], "%Y-%m-%d")
 
     if request.method == "POST":
@@ -405,19 +373,27 @@ def enviar(id):
         os.remove(temp_path)
 
         envio = datetime.strptime(data_envio, "%Y-%m-%d %H:%M")
-        fora_prazo = envio.date() > prazo.date()
-
         msg = f"Arquivo enviado com sucesso em {envio.strftime('%d/%m/%Y às %H:%M')}"
-        if fora_prazo:
+        if envio.date() > prazo.date():
             msg += " (FORA DO PRAZO)"
 
-        return render_template("sucesso.html", mensagem=msg)
+        return f"<h3>{msg}</h3><a href='/dashboard'>Voltar</a>"
 
     conn.close()
-    return render_template("enviar.html", solicitacao=solicitacao)
+
+    return f"""
+        <h2>Enviar Arquivo</h2>
+        <p><b>Solicitação:</b> {solicitacao['titulo']}</p>
+        <p><b>Prazo:</b> {solicitacao['prazo']}</p>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="file" name="arquivo" required><br><br>
+            <button>Enviar</button>
+        </form>
+        <br><a href="/dashboard">Voltar</a>
+    """
 
 # ==================================================
-# OAUTH GOOGLE
+# OAUTH
 # ==================================================
 @app.route("/autorizar-google")
 def autorizar_google():
@@ -446,9 +422,9 @@ def oauth2callback():
     creds = flow.credentials
 
     return f"""
-    <h2>Autorização concluída</h2>
-    <p>Copie TODO o conteúdo abaixo e cole na variável <b>GOOGLE_DRIVE_TOKEN</b> no Render:</p>
-    <textarea rows="15" cols="120">{creds.to_json()}</textarea>
+        <h2>Autorização concluída</h2>
+        <p>Copie TODO o conteúdo abaixo e cole na variável <b>GOOGLE_DRIVE_TOKEN</b> no Render:</p>
+        <textarea rows="15" cols="120">{creds.to_json()}</textarea>
     """
 
 # ==================================================
