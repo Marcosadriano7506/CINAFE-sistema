@@ -16,6 +16,8 @@ def get_db():
 
 def init_db():
     conn = get_db()
+
+    # Tabela de usuários
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,6 +26,16 @@ def init_db():
             role TEXT NOT NULL
         )
     """)
+
+    # Tabela de escolas
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS escolas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            codigo TEXT UNIQUE NOT NULL
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -77,7 +89,42 @@ def login():
 def dashboard():
     if "user" not in session:
         return redirect("/")
-    return render_template("dashboard.html", role=session["role"])
+
+    return render_template(
+        "dashboard.html",
+        role=session["role"]
+    )
+
+
+@app.route("/criar-escola", methods=["GET", "POST"])
+def criar_escola():
+    if "user" not in session or session["role"] != "admin":
+        return redirect("/")
+
+    if request.method == "POST":
+        nome = request.form["nome"]
+        codigo = request.form["codigo"]
+
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO escolas (nome, codigo) VALUES (?, ?)",
+            (nome, codigo)
+        )
+        conn.commit()
+        conn.close()
+
+        return "Escola cadastrada com sucesso"
+
+    return """
+        <h2>Cadastrar Escola</h2>
+        <form method="POST">
+            <input name="nome" placeholder="Nome da escola" required><br><br>
+            <input name="codigo" placeholder="Código da escola" required><br><br>
+            <button type="submit">Cadastrar</button>
+        </form>
+        <br>
+        <a href="/dashboard">Voltar</a>
+    """
 
 
 @app.route("/logout")
