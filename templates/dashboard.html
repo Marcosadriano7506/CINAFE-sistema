@@ -5,6 +5,25 @@
 </head>
 <body>
     <h1>Painel do CINAFE</h1>
-    <p>Sistema em construção</p>
+
+    {% if role == "admin" %}
+        <p><strong>Perfil:</strong> Secretaria (Administrador)</p>
+        <ul>
+            <li>📢 Gerenciar Comunicados</li>
+            <li>📂 Solicitar Arquivos</li>
+            <li>🏫 Cadastrar Escolas</li>
+            <li>👥 Gerenciar Usuários</li>
+        </ul>
+    {% else %}
+        <p><strong>Perfil:</strong> Escola</p>
+        <ul>
+            <li>📢 Ver Comunicados</li>
+            <li>📂 Enviar Arquivos</li>
+            <li>💬 Chat com a Secretaria</li>
+        </ul>
+    {% endif %}
+
+    <br>
+    <a href="/logout">Sair</a>
 </body>
 </html>
