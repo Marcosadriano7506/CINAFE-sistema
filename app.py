@@ -6,47 +6,58 @@ import os
 import json
 from datetime import datetime
 
-from google.oauth2 import service_account
+from google_auth_oauthlib.flow import Flow
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
+# =========================
+# APP
+# =========================
 app = Flask(__name__)
 app.secret_key = "cinafe_secret_key"
 
 # =========================
-# CONFIG GOOGLE DRIVE
+# GOOGLE DRIVE - OAUTH
 # =========================
-SCOPES = ["https://www.googleapis.com/auth/drive"]
+SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+CLIENT_SECRETS_FILE = "credentials.json"
+TOKEN_FILE = "token.json"
 
 PASTA_ANO = "2026"
 PASTA_SOLICITACOES = "SOLICITACOES"
 
 
 def get_drive_service():
-    creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
-    if not creds_json:
-        raise Exception("Credenciais do Google Drive não encontradas")
+    creds = None
 
-    credentials = service_account.Credentials.from_service_account_info(
-        json.loads(creds_json),
-        scopes=SCOPES
-    )
-    return build("drive", "v3", credentials=credentials)
+    if os.path.exists(TOKEN_FILE):
+        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            raise Exception("Google Drive não autorizado")
+
+        with open(TOKEN_FILE, "w") as token:
+            token.write(creds.to_json())
+
+    return build("drive", "v3", credentials=creds)
 
 
 def get_or_create_folder(name, parent_id=None):
-    drive_service = get_drive_service()
+    drive = get_drive_service()
 
     query = f"name='{name}' and mimeType='application/vnd.google-apps.folder'"
     if parent_id:
         query += f" and '{parent_id}' in parents"
 
-    results = drive_service.files().list(
+    results = drive.files().list(
         q=query,
         spaces="drive",
-        fields="files(id, name)",
-        supportsAllDrives=True,
-        includeItemsFromAllDrives=True
+        fields="files(id, name)"
     ).execute()
 
     files = results.get("files", [])
@@ -57,42 +68,37 @@ def get_or_create_folder(name, parent_id=None):
         "name": name,
         "mimeType": "application/vnd.google-apps.folder"
     }
+
     if parent_id:
         metadata["parents"] = [parent_id]
 
-    folder = drive_service.files().create(
+    folder = drive.files().create(
         body=metadata,
-        fields="id",
-        supportsAllDrives=True
+        fields="id"
     ).execute()
 
     return folder["id"]
 
 
 def upload_to_drive(file_path, file_name, solicitacao, escola):
-    drive_service = get_drive_service()
+    drive = get_drive_service()
 
     pasta_ano = get_or_create_folder(PASTA_ANO)
     pasta_solic = get_or_create_folder(PASTA_SOLICITACOES, pasta_ano)
     pasta_nome = get_or_create_folder(solicitacao, pasta_solic)
     pasta_escola = get_or_create_folder(escola, pasta_nome)
 
-    media = MediaFileUpload(
-        file_path,
-        resumable=False
-    )
+    media = MediaFileUpload(file_path, resumable=False)
 
     metadata = {
         "name": file_name,
         "parents": [pasta_escola]
     }
 
-    uploaded = drive_service.files().create(
+    uploaded = drive.files().create(
         body=metadata,
         media_body=media,
-        fields="id, webViewLink",
-        supportsAllDrives=True,
-        includeItemsFromAllDrives=True
+        fields="id, webViewLink"
     ).execute()
 
     return uploaded["webViewLink"]
@@ -171,7 +177,43 @@ init_db()
 create_admin()
 
 # =========================
-# ROTAS
+# ROTAS AUTH GOOGLE
+# =========================
+@app.route("/autorizar-google")
+def autorizar_google():
+    flow = Flow.from_client_secrets_file(
+        CLIENT_SECRETS_FILE,
+        scopes=SCOPES,
+        redirect_uri="https://cinafe.onrender.com/oauth2callback"
+    )
+
+    auth_url, _ = flow.authorization_url(
+        access_type="offline",
+        prompt="consent"
+    )
+
+    return redirect(auth_url)
+
+
+@app.route("/oauth2callback")
+def oauth2callback():
+    flow = Flow.from_client_secrets_file(
+        CLIENT_SECRETS_FILE,
+        scopes=SCOPES,
+        redirect_uri="https://cinafe.onrender.com/oauth2callback"
+    )
+
+    flow.fetch_token(authorization_response=request.url)
+    creds = flow.credentials
+
+    with open(TOKEN_FILE, "w") as token:
+        token.write(creds.to_json())
+
+    return "Google Drive autorizado com sucesso. Pode fechar esta aba."
+
+
+# =========================
+# LOGIN
 # =========================
 @app.route("/", methods=["GET", "POST"])
 def login():
@@ -213,6 +255,9 @@ def dashboard():
     )
 
 
+# =========================
+# ADMIN
+# =========================
 @app.route("/criar-escola", methods=["GET", "POST"])
 def criar_escola():
     if session.get("role") != "admin":
@@ -224,21 +269,17 @@ def criar_escola():
         senha = f"{codigo}@123"
 
         conn = get_db()
-        try:
-            conn.execute(
-                "INSERT INTO escolas (nome, codigo) VALUES (?, ?)",
-                (nome, codigo)
-            )
-            conn.execute(
-                "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                (codigo, generate_password_hash(senha), "escola")
-            )
-            conn.commit()
-        except sqlite3.IntegrityError:
-            conn.close()
-            return "Código de escola já existe"
-
+        conn.execute(
+            "INSERT INTO escolas (nome, codigo) VALUES (?, ?)",
+            (nome, codigo)
+        )
+        conn.execute(
+            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+            (codigo, generate_password_hash(senha), "escola")
+        )
+        conn.commit()
         conn.close()
+
         return f"""
             <h3>Escola cadastrada</h3>
             <p>Login: {codigo}</p>
@@ -282,6 +323,9 @@ def nova_solicitacao():
     """
 
 
+# =========================
+# ESCOLA - ENVIO
+# =========================
 @app.route("/enviar/<int:id>", methods=["GET", "POST"])
 def enviar(id):
     if session.get("role") != "escola":
