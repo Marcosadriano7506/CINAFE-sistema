@@ -27,7 +27,7 @@ drive_service = build("drive", "v3", credentials=credentials)
 
 # IDs DAS PASTAS
 PASTA_ANO = "2026"
-PASTA_SOLICITACOES = "SOLICITAÇÕES"
+PASTA_SOLICITACOES = "SOLICITACOES"
 
 # =========================
 # BANCO DE DADOS
