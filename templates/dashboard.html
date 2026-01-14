@@ -21,8 +21,9 @@
     <h2>Painel da Secretaria</h2>
 
     <p>
-        <a href="/criar-escola">➕ Cadastrar Escola</a> |
-        <a href="/nova-solicitacao">📄 Nova Solicitação</a>
+        ➕ <a href="/criar-escola">Cadastrar Escola</a> |
+        📄 <a href="/nova-solicitacao">Nova Solicitação</a> |
+        📢 <a href="/novo-comunicado">Novo Comunicado</a>
     </p>
 
     <h3>Solicitações Criadas</h3>
@@ -51,11 +52,45 @@
         <p>Nenhuma solicitação cadastrada.</p>
     {% endif %}
 
+    <h3>Comunicados Oficiais</h3>
+
+    {% if comunicados %}
+        <ul>
+        {% for c in comunicados %}
+            <li>
+                <strong>{{ c.titulo }}</strong><br>
+                {{ c.mensagem }}<br>
+                <em>{{ c.data }}</em>
+            </li>
+            <br>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>Nenhum comunicado publicado.</p>
+    {% endif %}
+
 {% else %}
 
     <h2>Painel da Escola</h2>
 
-    <h3>Solicitações Disponíveis</h3>
+    <h3>Comunicados Oficiais</h3>
+
+    {% if comunicados %}
+        <ul>
+        {% for c in comunicados %}
+            <li>
+                <strong>{{ c.titulo }}</strong><br>
+                {{ c.mensagem }}<br>
+                <em>{{ c.data }}</em>
+            </li>
+            <br>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>Nenhum comunicado publicado.</p>
+    {% endif %}
+
+    <h3>Solicitações</h3>
 
     {% if solicitacoes %}
         <table border="1" cellpadding="8">
