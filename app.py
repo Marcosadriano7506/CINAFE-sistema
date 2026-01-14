@@ -268,6 +268,56 @@ def enviar(id):
     </form>
     """
 
+@app.route("/criar-escola", methods=["GET", "POST"])
+def criar_escola():
+    if session.get("role") != "admin":
+        return redirect("/")
+
+    if request.method == "POST":
+        nome = request.form["nome"]
+        codigo = request.form["codigo"].lower()
+
+        senha_inicial = f"{codigo}@123"
+
+        conn = get_db()
+
+        try:
+            # cadastra escola
+            conn.execute(
+                "INSERT INTO escolas (nome, codigo) VALUES (?, ?)",
+                (nome, codigo)
+            )
+
+            # cria usuário da escola
+            conn.execute(
+                "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                (codigo, generate_password_hash(senha_inicial), "escola")
+            )
+
+            conn.commit()
+        except sqlite3.IntegrityError:
+            conn.close()
+            return "Código da escola já existe"
+
+        conn.close()
+
+        return f"""
+            <h2>Escola cadastrada com sucesso</h2>
+            <p><strong>Login:</strong> {codigo}</p>
+            <p><strong>Senha inicial:</strong> {senha_inicial}</p>
+            <a href="/dashboard">Voltar ao painel</a>
+        """
+
+    return """
+        <h2>Cadastrar Escola</h2>
+        <form method="POST">
+            <input name="nome" placeholder="Nome da escola" required><br><br>
+            <input name="codigo" placeholder="Código da escola (login)" required><br><br>
+            <button>Cadastrar</button>
+        </form>
+        <br>
+        <a href="/dashboard">Voltar</a>
+    """
 
 @app.route("/logout")
 def logout():
