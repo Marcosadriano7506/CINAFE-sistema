@@ -333,6 +333,88 @@ def nova_solicitacao():
     """
 
 # ==================================================
+# CONTROLE DA SECRETARIA (STATUS DAS ESCOLAS)
+# ==================================================
+@app.route("/controle/<int:id>")
+def controle(id):
+    if session.get("role") != "admin":
+        return redirect("/dashboard")
+
+    conn = get_db()
+
+    solicitacao = conn.execute(
+        "SELECT * FROM solicitacoes WHERE id=?", (id,)
+    ).fetchone()
+
+    if not solicitacao:
+        conn.close()
+        return "Solicitação não encontrada"
+
+    escolas = conn.execute(
+        "SELECT codigo FROM escolas ORDER BY codigo"
+    ).fetchall()
+
+    envios = conn.execute(
+        "SELECT * FROM envios WHERE solicitacao_id=?", (id,)
+    ).fetchall()
+
+    envios_dict = {e["escola"]: e for e in envios}
+
+    prazo = datetime.strptime(solicitacao["prazo"], "%Y-%m-%d")
+    hoje = datetime.now()
+
+    linhas = ""
+
+    for escola in escolas:
+        codigo = escola["codigo"]
+
+        if codigo in envios_dict:
+            envio = datetime.strptime(
+                envios_dict[codigo]["data_envio"], "%Y-%m-%d %H:%M"
+            )
+
+            if envio.date() <= prazo.date():
+                status = "🟢 Enviado no prazo"
+            else:
+                status = "🔴 Enviado fora do prazo"
+
+            link = f"<a href='{envios_dict[codigo]['link_drive']}' target='_blank'>Abrir no Drive</a>"
+        else:
+            if hoje.date() <= prazo.date():
+                status = "🟡 Pendente"
+            else:
+                status = "🔴 Em atraso"
+            link = "-"
+
+        linhas += f"""
+            <tr>
+                <td>{codigo}</td>
+                <td>{status}</td>
+                <td>{link}</td>
+            </tr>
+        """
+
+    conn.close()
+
+    return f"""
+        <h2>Controle da Solicitação</h2>
+        <p><b>Título:</b> {solicitacao['titulo']}</p>
+        <p><b>Prazo:</b> {solicitacao['prazo']}</p>
+
+        <table border="1" cellpadding="8">
+            <tr>
+                <th>Escola</th>
+                <th>Status</th>
+                <th>Arquivo</th>
+            </tr>
+            {linhas}
+        </table>
+
+        <br>
+        <a href="/dashboard">⬅ Voltar ao painel</a>
+    """
+
+# ==================================================
 # ENVIO (ESCOLA)
 # ==================================================
 @app.route("/enviar/<int:id>", methods=["GET", "POST"])
