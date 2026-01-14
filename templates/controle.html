@@ -1,0 +1,29 @@
+<h2>Controle da Solicitação</h2>
+
+<p><strong>{{ solicitacao.titulo }}</strong></p>
+<p>Prazo: {{ solicitacao.prazo }}</p>
+
+<table border="1" cellpadding="8">
+    <tr>
+        <th>Escola</th>
+        <th>Status</th>
+        <th>Arquivo</th>
+    </tr>
+
+    {% for r in resultado %}
+    <tr>
+        <td>{{ r.escola }}</td>
+        <td>{{ r.status }}</td>
+        <td>
+            {% if r.link %}
+                <a href="{{ r.link }}" target="_blank">Abrir no Drive</a>
+            {% else %}
+                —
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+
+<br>
+<a href="/dashboard">Voltar</a>
