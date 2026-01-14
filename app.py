@@ -156,6 +156,7 @@ def upload_to_drive(file_path, file_name, solicitacao, escola):
         body=file_metadata,
         media_body=media,
         fields="id, webViewLink"
+        supportsAllDrives=True
     ).execute()
 
     return uploaded["webViewLink"]
