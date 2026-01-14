@@ -22,7 +22,8 @@ app.secret_key = "cinafe_secret_key"
 # GOOGLE DRIVE - OAUTH
 # =========================
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-CLIENT_SECRETS_FILE = "credentials.json"
+
+CLIENT_SECRETS_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
 TOKEN_FILE = "token.json"
 
 PASTA_ANO = "2026"
@@ -30,6 +31,9 @@ PASTA_SOLICITACOES = "SOLICITACOES"
 
 
 def get_drive_service():
+    if not CLIENT_SECRETS_JSON:
+        raise Exception("Credenciais OAuth do Google não configuradas")
+
     creds = None
 
     if os.path.exists(TOKEN_FILE):
@@ -177,12 +181,12 @@ init_db()
 create_admin()
 
 # =========================
-# ROTAS AUTH GOOGLE
+# ROTAS OAUTH GOOGLE
 # =========================
 @app.route("/autorizar-google")
 def autorizar_google():
-    flow = Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE,
+    flow = Flow.from_client_config(
+        json.loads(CLIENT_SECRETS_JSON),
         scopes=SCOPES,
         redirect_uri="https://cinafe.onrender.com/oauth2callback"
     )
@@ -197,8 +201,8 @@ def autorizar_google():
 
 @app.route("/oauth2callback")
 def oauth2callback():
-    flow = Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE,
+    flow = Flow.from_client_config(
+        json.loads(CLIENT_SECRETS_JSON),
         scopes=SCOPES,
         redirect_uri="https://cinafe.onrender.com/oauth2callback"
     )
@@ -374,3 +378,4 @@ def enviar(id):
 def logout():
     session.clear()
     return redirect("/")
+
