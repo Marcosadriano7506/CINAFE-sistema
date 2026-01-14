@@ -2,37 +2,54 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>CINAFE | Login</title>
+    <title>CINAFE | Acesso ao Sistema</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
 
-    <!-- TOPO -->
-    <div class="topo">
+    <!-- HEADER IGUAL AO DASHBOARD -->
+    <div class="header">
         <h1>CINAFE</h1>
         <p>Centro de Informações do Núcleo de Avaliação e Formação Educacional</p>
     </div>
 
-    <!-- LOGIN -->
-    <div class="login-container">
-        <div class="login-card">
+    <!-- BANNER INSTITUCIONAL -->
+    <div class="banner">
+        <img src="{{ url_for('static', filename='Apresentação1.jpg') }}" alt="CINAFE">
+    </div>
 
-            <!-- IMAGEM / LOGO -->
-            <img src="{{ url_for('static', filename='Apresentação1.jpg') }}" alt="CINAFE">
+    <!-- CONTAINER PADRÃO -->
+    <div class="container">
 
-            <h2>Acesso ao Sistema</h2>
+        <h2>Acesso ao Sistema</h2>
 
-            <form method="POST">
-                <input type="text" name="username" placeholder="Usuário" required>
-                <input type="password" name="password" placeholder="Senha" required>
-                <button type="submit">Entrar</button>
-            </form>
+        <form method="POST">
+            <table style="max-width:400px;">
+                <tr>
+                    <td>Usuário</td>
+                    <td>
+                        <input type="text" name="username" required style="width:100%; padding:8px;">
+                    </td>
+                </tr>
+                <tr>
+                    <td>Senha</td>
+                    <td>
+                        <input type="password" name="password" required style="width:100%; padding:8px;">
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td style="padding-top:10px;">
+                        <button class="btn">Entrar</button>
+                    </td>
+                </tr>
+            </table>
+        </form>
 
-            <div class="footer-login">
-                © {{ now().year if now else '2026' }} CINAFE
-            </div>
+        <p style="margin-top:20px; font-size:13px; color:#666;">
+            © 2026 CINAFE
+        </p>
 
-        </div>
     </div>
 
 </body>
