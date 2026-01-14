@@ -12,17 +12,16 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# =========================
+# ==================================================
 # APP
-# =========================
+# ==================================================
 app = Flask(__name__)
 app.secret_key = "cinafe_secret_key"
 
-# =========================
+# ==================================================
 # GOOGLE DRIVE - OAUTH
-# =========================
+# ==================================================
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-
 CLIENT_SECRETS_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
 TOKEN_FILE = "token.json"
 
@@ -30,9 +29,12 @@ PASTA_ANO = "2026"
 PASTA_SOLICITACOES = "SOLICITACOES"
 
 
+# ==================================================
+# GOOGLE DRIVE FUNÇÕES
+# ==================================================
 def get_drive_service():
     if not CLIENT_SECRETS_JSON:
-        raise Exception("Credenciais OAuth do Google não configuradas")
+        raise Exception("Credenciais OAuth não configuradas")
 
     creds = None
 
@@ -108,9 +110,9 @@ def upload_to_drive(file_path, file_name, solicitacao, escola):
     return uploaded["webViewLink"]
 
 
-# =========================
+# ==================================================
 # BANCO DE DADOS
-# =========================
+# ==================================================
 def get_db():
     conn = sqlite3.connect("cinafe.db")
     conn.row_factory = sqlite3.Row
@@ -157,6 +159,15 @@ def init_db():
         )
     """)
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS comunicados (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            titulo TEXT,
+            mensagem TEXT,
+            data TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -180,45 +191,9 @@ def create_admin():
 init_db()
 create_admin()
 
-# =========================
-# ROTAS OAUTH GOOGLE
-# =========================
-@app.route("/autorizar-google")
-def autorizar_google():
-    flow = Flow.from_client_config(
-        json.loads(CLIENT_SECRETS_JSON),
-        scopes=SCOPES,
-        redirect_uri="https://cinafe.onrender.com/oauth2callback"
-    )
-
-    auth_url, _ = flow.authorization_url(
-        access_type="offline",
-        prompt="consent"
-    )
-
-    return redirect(auth_url)
-
-
-@app.route("/oauth2callback")
-def oauth2callback():
-    flow = Flow.from_client_config(
-        json.loads(CLIENT_SECRETS_JSON),
-        scopes=SCOPES,
-        redirect_uri="https://cinafe.onrender.com/oauth2callback"
-    )
-
-    flow.fetch_token(authorization_response=request.url)
-    creds = flow.credentials
-
-    with open(TOKEN_FILE, "w") as token:
-        token.write(creds.to_json())
-
-    return "Google Drive autorizado com sucesso. Pode fechar esta aba."
-
-
-# =========================
+# ==================================================
 # LOGIN
-# =========================
+# ==================================================
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -241,6 +216,15 @@ def login():
     return render_template("login.html")
 
 
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/")
+
+
+# ==================================================
+# DASHBOARD
+# ==================================================
 @app.route("/dashboard")
 def dashboard():
     if "user" not in session:
@@ -250,18 +234,59 @@ def dashboard():
     solicitacoes = conn.execute(
         "SELECT * FROM solicitacoes ORDER BY id DESC"
     ).fetchall()
+
+    comunicados = conn.execute(
+        "SELECT * FROM comunicados ORDER BY id DESC"
+    ).fetchall()
+
     conn.close()
 
     return render_template(
         "dashboard.html",
         role=session["role"],
-        solicitacoes=solicitacoes
+        solicitacoes=solicitacoes,
+        comunicados=comunicados
     )
 
 
-# =========================
-# ADMIN
-# =========================
+# ==================================================
+# COMUNICADOS
+# ==================================================
+@app.route("/novo-comunicado", methods=["GET", "POST"])
+def novo_comunicado():
+    if session.get("role") != "admin":
+        return redirect("/dashboard")
+
+    if request.method == "POST":
+        titulo = request.form["titulo"]
+        mensagem = request.form["mensagem"]
+        data = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO comunicados (titulo, mensagem, data) VALUES (?, ?, ?)",
+            (titulo, mensagem, data)
+        )
+        conn.commit()
+        conn.close()
+
+        return redirect("/dashboard")
+
+    return """
+        <h2>Novo Comunicado</h2>
+        <form method="POST">
+            <input name="titulo" placeholder="Título" required><br><br>
+            <textarea name="mensagem" placeholder="Mensagem" required></textarea><br><br>
+            <button>Publicar</button>
+        </form>
+        <br>
+        <a href="/dashboard">Voltar</a>
+    """
+
+
+# ==================================================
+# ADMIN - ESCOLAS E SOLICITAÇÕES
+# ==================================================
 @app.route("/criar-escola", methods=["GET", "POST"])
 def criar_escola():
     if session.get("role") != "admin":
@@ -327,13 +352,74 @@ def nova_solicitacao():
     """
 
 
-# =========================
+# ==================================================
+# CONTROLE DA SECRETARIA
+# ==================================================
+@app.route("/controle/<int:id>")
+def controle(id):
+    if session.get("role") != "admin":
+        return redirect("/")
+
+    conn = get_db()
+
+    solicitacao = conn.execute(
+        "SELECT * FROM solicitacoes WHERE id=?", (id,)
+    ).fetchone()
+
+    escolas = conn.execute(
+        "SELECT codigo FROM escolas"
+    ).fetchall()
+
+    envios = conn.execute(
+        "SELECT * FROM envios WHERE solicitacao_id=?", (id,)
+    ).fetchall()
+
+    envios_dict = {e["escola"]: e for e in envios}
+
+    prazo = datetime.strptime(solicitacao["prazo"], "%Y-%m-%d")
+    hoje = datetime.now()
+
+    resultado = []
+
+    for escola in escolas:
+        codigo = escola["codigo"]
+
+        if codigo in envios_dict:
+            envio = datetime.strptime(envios_dict[codigo]["data_envio"], "%Y-%m-%d %H:%M")
+            status = "🟢 Enviado" if envio.date() <= prazo.date() else "🔴 Fora do prazo"
+            link = envios_dict[codigo]["link_drive"]
+        else:
+            status = "🟡 Pendente" if hoje.date() <= prazo.date() else "🔴 Em atraso"
+            link = None
+
+        resultado.append({
+            "escola": codigo,
+            "status": status,
+            "link": link
+        })
+
+    conn.close()
+
+    return render_template(
+        "controle.html",
+        solicitacao=solicitacao,
+        resultado=resultado
+    )
+
+
+# ==================================================
 # ESCOLA - ENVIO
-# =========================
+# ==================================================
 @app.route("/enviar/<int:id>", methods=["GET", "POST"])
 def enviar(id):
     if session.get("role") != "escola":
         return redirect("/")
+
+    conn = get_db()
+    solicitacao = conn.execute(
+        "SELECT * FROM solicitacoes WHERE id=?", (id,)
+    ).fetchone()
+    prazo = datetime.strptime(solicitacao["prazo"], "%Y-%m-%d")
 
     if request.method == "POST":
         file = request.files["arquivo"]
@@ -342,40 +428,44 @@ def enviar(id):
         temp_path = f"/tmp/{filename}"
         file.save(temp_path)
 
-        conn = get_db()
-        solicitacao = conn.execute(
-            "SELECT titulo FROM solicitacoes WHERE id=?", (id,)
-        ).fetchone()["titulo"]
+        data_envio = datetime.now().strftime("%Y-%m-%d %H:%M")
 
         link = upload_to_drive(
             temp_path,
             filename,
-            solicitacao,
+            solicitacao["titulo"],
             session["user"]
         )
 
         conn.execute(
             "INSERT INTO envios (solicitacao_id, escola, arquivo, link_drive, data_envio) VALUES (?, ?, ?, ?, ?)",
-            (id, session["user"], filename, link,
-             datetime.now().strftime("%d/%m/%Y %H:%M"))
+            (id, session["user"], filename, link, data_envio)
         )
         conn.commit()
         conn.close()
 
         os.remove(temp_path)
-        return "Arquivo enviado com sucesso"
 
-    return """
+        envio = datetime.strptime(data_envio, "%Y-%m-%d %H:%M")
+        fora_prazo = envio.date() > prazo.date()
+
+        msg = f"Arquivo enviado com sucesso em {envio.strftime('%d/%m/%Y às %H:%M')}"
+        if fora_prazo:
+            msg += " (FORA DO PRAZO)"
+
+        return f"""
+            <h3>{msg}</h3>
+            <a href="/dashboard">Voltar ao painel</a>
+        """
+
+    conn.close()
+
+    return f"""
         <h2>Enviar Arquivo</h2>
+        <p><strong>Solicitação:</strong> {solicitacao['titulo']}</p>
+        <p><strong>Prazo:</strong> {solicitacao['prazo']}</p>
         <form method="POST" enctype="multipart/form-data">
             <input type="file" name="arquivo" required><br><br>
             <button>Enviar</button>
         </form>
     """
-
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect("/")
-
