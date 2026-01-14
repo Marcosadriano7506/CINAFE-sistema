@@ -17,7 +17,6 @@ def get_db():
 def init_db():
     conn = get_db()
 
-    # Tabela de usuários
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,12 +26,20 @@ def init_db():
         )
     """)
 
-    # Tabela de escolas
     conn.execute("""
         CREATE TABLE IF NOT EXISTS escolas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
             codigo TEXT UNIQUE NOT NULL
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS comunicados (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            titulo TEXT NOT NULL,
+            mensagem TEXT NOT NULL,
+            data TEXT NOT NULL
         )
     """)
 
@@ -56,7 +63,6 @@ def create_admin():
     conn.close()
 
 
-# Inicialização automática
 init_db()
 create_admin()
 
@@ -90,10 +96,48 @@ def dashboard():
     if "user" not in session:
         return redirect("/")
 
+    conn = get_db()
+    comunicados = conn.execute(
+        "SELECT * FROM comunicados ORDER BY id DESC"
+    ).fetchall()
+    conn.close()
+
     return render_template(
         "dashboard.html",
-        role=session["role"]
+        role=session["role"],
+        comunicados=comunicados
     )
+
+
+@app.route("/novo-comunicado", methods=["GET", "POST"])
+def novo_comunicado():
+    if "user" not in session or session["role"] != "admin":
+        return redirect("/")
+
+    if request.method == "POST":
+        titulo = request.form["titulo"]
+        mensagem = request.form["mensagem"]
+
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO comunicados (titulo, mensagem, data) VALUES (?, ?, date('now'))",
+            (titulo, mensagem)
+        )
+        conn.commit()
+        conn.close()
+
+        return redirect("/dashboard")
+
+    return """
+        <h2>Novo Comunicado</h2>
+        <form method="POST">
+            <input name="titulo" placeholder="Título" required><br><br>
+            <textarea name="mensagem" placeholder="Mensagem" required></textarea><br><br>
+            <button type="submit">Publicar</button>
+        </form>
+        <br>
+        <a href="/dashboard">Voltar</a>
+    """
 
 
 @app.route("/criar-escola", methods=["GET", "POST"])
@@ -107,27 +151,25 @@ def criar_escola():
 
         conn = get_db()
 
-        # Cadastra escola
         conn.execute(
             "INSERT INTO escolas (nome, codigo) VALUES (?, ?)",
             (nome, codigo)
         )
 
-        # Cria usuário da escola automaticamente
-        senha_inicial = generate_password_hash(codigo + "@123")
+        senha = generate_password_hash(codigo + "@123")
         conn.execute(
             "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-            (codigo, senha_inicial, "escola")
+            (codigo, senha, "escola")
         )
 
         conn.commit()
         conn.close()
 
         return f"""
-            <h3>Escola cadastrada com sucesso</h3>
-            <p><strong>Login da escola:</strong> {codigo}</p>
-            <p><strong>Senha inicial:</strong> {codigo}@123</p>
-            <a href="/dashboard">Voltar ao painel</a>
+            <h3>Escola cadastrada</h3>
+            <p>Login: {codigo}</p>
+            <p>Senha: {codigo}@123</p>
+            <a href="/dashboard">Voltar</a>
         """
 
     return """
