@@ -1,16 +1,18 @@
 from flask import Flask, render_template, request, redirect, session
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
-import os
 
 app = Flask(__name__)
 app.secret_key = "cinafe_secret_key"
 
-# ---------- BANCO ----------
+# =========================
+# BANCO DE DADOS
+# =========================
 def get_db():
     conn = sqlite3.connect("cinafe.db")
     conn.row_factory = sqlite3.Row
     return conn
+
 
 def init_db():
     conn = get_db()
@@ -25,9 +27,30 @@ def init_db():
     conn.commit()
     conn.close()
 
-init_db()
 
-# ---------- ROTAS ----------
+def create_admin():
+    conn = get_db()
+    admin = conn.execute(
+        "SELECT * FROM users WHERE username = ?", ("admin",)
+    ).fetchone()
+
+    if not admin:
+        conn.execute(
+            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+            ("admin", generate_password_hash("admin123"), "admin")
+        )
+        conn.commit()
+
+    conn.close()
+
+
+# Inicialização automática
+init_db()
+create_admin()
+
+# =========================
+# ROTAS
+# =========================
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -49,16 +72,15 @@ def login():
 
     return render_template("login.html")
 
+
 @app.route("/dashboard")
 def dashboard():
     if "user" not in session:
         return redirect("/")
     return render_template("dashboard.html", role=session["role"])
 
+
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/")
-
-if __name__ == "__main__":
-    pass
