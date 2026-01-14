@@ -9,22 +9,28 @@
     {% if role == "admin" %}
         <p><strong>Perfil:</strong> Secretaria (Administrador)</p>
         <ul>
+            <li><a href="/novo-comunicado">📢 Novo Comunicado</a></li>
             <li><a href="/criar-escola">🏫 Cadastrar Escolas</a></li>
-            <li>📢 Gerenciar Comunicados</li>
-            <li>📂 Solicitar Arquivos</li>
-            <li>👥 Gerenciar Usuários</li>
         </ul>
     {% else %}
         <p><strong>Perfil:</strong> Escola</p>
-        <ul>
-            <li>📢 Ver Comunicados</li>
-            <li>📂 Enviar Arquivos</li>
-            <li>💬 Chat com a Secretaria</li>
-        </ul>
     {% endif %}
+
+    <hr>
+
+    <h3>Comunicados Oficiais</h3>
+
+    {% for c in comunicados %}
+        <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
+            <strong>{{ c["titulo"] }}</strong><br>
+            <small>{{ c["data"] }}</small>
+            <p>{{ c["mensagem"] }}</p>
+        </div>
+    {% else %}
+        <p>Nenhum comunicado publicado.</p>
+    {% endfor %}
 
     <br>
     <a href="/logout">Sair</a>
 </body>
 </html>
-
