@@ -3,10 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <title>CINAFE - Painel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
-<h1>CINAFE – Centro de Informações do Núcleo de Avaliação e Formação Educacional</h1>
+<div class="header">
+    <h1>CINAFE</h1>
+    <p>Centro de Informações do Núcleo de Avaliação e Formação Educacional</p>
+</div>
+
+<div class="container">
+    <!-- conteúdo atual do dashboard aqui -->
+</div>
+
 
 <p>
     Usuário logado: <strong>{{ session.user }}</strong>
@@ -21,9 +30,10 @@
     <h2>Painel da Secretaria</h2>
 
     <p>
-        ➕ <a href="/criar-escola">Cadastrar Escola</a> |
-        📄 <a href="/nova-solicitacao">Nova Solicitação</a> |
-        📢 <a href="/novo-comunicado">Novo Comunicado</a>
+<a href="/novo-comunicado" class="btn">📢 Novo Comunicado</a>
+<a href="/nova-solicitacao" class="btn">📄 Nova Solicitação</a>
+<a href="/criar-escola" class="btn red">➕ Cadastrar Escola</a>
+
     </p>
 
     <h3>Solicitações Criadas</h3>
