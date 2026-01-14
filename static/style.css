@@ -1,112 +1,122 @@
-/* ==========================
-   RESET BÁSICO
-========================== */
+/* =====================
+   CINAFE - ESTILO BASE
+===================== */
+
 * {
-    margin: 0;
-    padding: 0;
     box-sizing: border-box;
-    font-family: Arial, Helvetica, sans-serif;
 }
 
-/* ==========================
-   CORES INSTITUCIONAIS
-========================== */
-:root {
-    --azul: #0b3c5d;
-    --azul-claro: #e9f1f7;
-    --vermelho: #c00000;
-    --cinza: #f4f6f8;
-}
-
-/* ==========================
-   BODY
-========================== */
 body {
-    background-color: var(--cinza);
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background-color: #f2f5f8;
+    color: #222;
 }
 
-/* ==========================
-   TOPO PADRÃO (IGUAL DASHBOARD)
-========================== */
-.topo {
-    background-color: var(--azul);
-    color: #fff;
-    padding: 20px 30px;
+/* HEADER */
+.header {
+    background-color: #0b3c5d;
+    color: white;
+    padding: 20px;
 }
 
-.topo h1 {
-    font-size: 26px;
+.header h1 {
+    margin: 0;
+    font-size: 24px;
 }
 
-.topo p {
-    font-size: 14px;
+.header p {
+    margin: 5px 0 0;
+    font-size: 13px;
     opacity: 0.9;
 }
 
-/* ==========================
-   LOGIN
-========================== */
-.login-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: calc(100vh - 110px);
+/* CONTAINER */
+.container {
+    max-width: 1100px;
+    margin: 30px auto;
+    background: white;
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
-.login-card {
-    background: #fff;
-    width: 360px;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-    text-align: center;
+/* LINKS */
+a {
+    color: #0b3c5d;
+    text-decoration: none;
+    font-weight: bold;
 }
 
-.login-card img {
-    width: 90px;
-    margin-bottom: 15px;
+a:hover {
+    text-decoration: underline;
 }
 
-.login-card h2 {
+/* BOTÕES */
+.btn {
+    display: inline-block;
+    background-color: #0b3c5d;
+    color: white;
+    padding: 10px 14px;
+    border-radius: 5px;
+    margin-right: 5px;
+}
+
+.btn.red {
+    background-color: #b30000;
+}
+
+/* TABELAS */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+th {
+    background-color: #e6ecf1;
+    padding: 10px;
+    text-align: left;
+}
+
+td {
+    padding: 10px;
+    border-top: 1px solid #ddd;
+}
+
+/* STATUS */
+.status-ok {
+    color: green;
+    font-weight: bold;
+}
+
+.status-pendente {
+    color: orange;
+    font-weight: bold;
+}
+
+.status-atraso {
+    color: red;
+    font-weight: bold;
+}
+
+/* ALERTAS */
+.alert {
+    background-color: #e6f2ff;
+    border-left: 5px solid #0b3c5d;
+    padding: 15px;
     margin-bottom: 20px;
-    color: var(--azul);
 }
 
-.login-card input {
-    width: 100%;
-    padding: 12px;
-    margin-bottom: 15px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    font-size: 14px;
-}
-
-.login-card input:focus {
-    outline: none;
-    border-color: var(--azul);
-}
-
-.login-card button {
-    width: 100%;
-    padding: 12px;
-    background-color: var(--azul);
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    font-size: 15px;
-    cursor: pointer;
-}
-
-.login-card button:hover {
-    opacity: 0.9;
-}
-
-/* ==========================
-   RODAPÉ
-========================== */
-.footer-login {
+/* IMAGEM INSTITUCIONAL */
+.banner {
+    max-width: 1100px;
+    margin: 20px auto;
     text-align: center;
-    font-size: 12px;
-    color: #666;
-    margin-top: 20px;
+}
+
+.banner img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
 }
