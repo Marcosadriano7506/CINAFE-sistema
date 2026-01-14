@@ -4,33 +4,55 @@
     <title>CINAFE - Painel</title>
 </head>
 <body>
-    <h1>Painel do CINAFE</h1>
 
-    {% if role == "admin" %}
-        <p><strong>Perfil:</strong> Secretaria (Administrador)</p>
-        <ul>
-            <li><a href="/novo-comunicado">📢 Novo Comunicado</a></li>
-            <li><a href="/criar-escola">🏫 Cadastrar Escolas</a></li>
-        </ul>
-    {% else %}
-        <p><strong>Perfil:</strong> Escola</p>
-    {% endif %}
+<h1>Painel do CINAFE</h1>
 
-    <hr>
+{% if role == "admin" %}
+    <p><strong>Perfil:</strong> Secretaria (Administrador)</p>
 
-    <h3>Comunicados Oficiais</h3>
+    <ul>
+        <li><a href="/novo-comunicado">📢 Novo Comunicado</a></li>
+        <li><a href="/nova-solicitacao">📂 Criar Solicitação de Arquivo</a></li>
+        <li><a href="/criar-escola">🏫 Cadastrar Escolas</a></li>
+    </ul>
+{% else %}
+    <p><strong>Perfil:</strong> Escola</p>
+{% endif %}
 
-    {% for c in comunicados %}
-        <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
-            <strong>{{ c["titulo"] }}</strong><br>
-            <small>{{ c["data"] }}</small>
-            <p>{{ c["mensagem"] }}</p>
-        </div>
-    {% else %}
-        <p>Nenhum comunicado publicado.</p>
-    {% endfor %}
+<hr>
 
-    <br>
-    <a href="/logout">Sair</a>
+<h3>Solicitações de Arquivos</h3>
+
+{% for s in solicitacoes %}
+    <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
+        <strong>{{ s["titulo"] }}</strong><br>
+        <small>Prazo: {{ s["prazo"] }}</small>
+        <p>{{ s["descricao"] }}</p>
+
+        {% if role == "escola" %}
+            <a href="/enviar/{{ s['id'] }}">📤 Enviar Arquivo</a>
+        {% endif %}
+    </div>
+{% else %}
+    <p>Nenhuma solicitação criada.</p>
+{% endfor %}
+
+<hr>
+
+<h3>Comunicados Oficiais</h3>
+
+{% for c in comunicados %}
+    <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
+        <strong>{{ c["titulo"] }}</strong><br>
+        <small>{{ c["data"] }}</small>
+        <p>{{ c["mensagem"] }}</p>
+    </div>
+{% else %}
+    <p>Nenhum comunicado publicado.</p>
+{% endfor %}
+
+<br>
+<a href="/logout">Sair</a>
+
 </body>
 </html>
