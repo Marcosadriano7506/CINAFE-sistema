@@ -97,23 +97,20 @@ def novo_comunicado():
         return redirect("/dashboard")
 
     if request.method == "POST":
-        try:
-            conn = get_db()
-            cur = conn.cursor()
+        titulo = request.form["titulo"]
+        mensagem = request.form["mensagem"]
 
-            cur.execute(
-                "INSERT INTO comunicados (titulo, mensagem, data) VALUES (%s, %s, %s)",
-                (
-                    request.form["titulo"],
-                    request.form["mensagem"],
-                    datetime.now()
-                )
-            )
-            conn.commit()
-            return redirect("/dashboard")
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO comunicados (titulo, mensagem, data) VALUES (%s, %s, NOW())",
+            (titulo, mensagem)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
 
-        finally:
-            conn.close()
+        return redirect("/dashboard")
 
     return render_template("novo_comunicado.html")
 
