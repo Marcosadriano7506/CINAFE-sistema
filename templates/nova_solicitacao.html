@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Nova Solicitação - CINAFE</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="header">
+    <h1>CINAFE</h1>
+    <p>Centro de Informações do Núcleo de Avaliação e Formação Educacional</p>
+</div>
+
+<div class="container">
+    <h2>📄 Nova Solicitação</h2>
+
+    <form method="POST">
+        <label>Título</label><br>
+        <input type="text" name="titulo" required style="width:100%; padding:10px;"><br><br>
+
+        <label>Descrição</label><br>
+        <textarea name="descricao" rows="5" required style="width:100%; padding:10px;"></textarea><br><br>
+
+        <label>Prazo</label><br>
+        <input type="date" name="prazo" required><br><br>
+
+        <button class="btn">Criar Solicitação</button>
+        <a href="/dashboard" class="btn red">Cancelar</a>
+    </form>
+</div>
+
+</body>
+</html>
