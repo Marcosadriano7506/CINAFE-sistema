@@ -278,10 +278,10 @@ def enviar(id):
         conn.close()
         os.remove(temp_path)
 
-        return f"""
-        <h3>Arquivo enviado com sucesso em {datetime.now().strftime('%d/%m/%Y às %H:%M')}</h3>
-        <a href="/dashboard">Voltar ao painel</a>
-        """
+        return render_template(
+    "envio_sucesso.html",
+    mensagem=msg
+)
 
     cur.close()
     conn.close()
