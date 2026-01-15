@@ -147,8 +147,19 @@ def get_or_create_folder(drive, name, parent_id=None):
 # ==================================================
 @app.route("/autorizar-google")
 def autorizar_google():
-    if session.get("role") != "admin":
-        return redirect("/dashboard")
+    flow = Flow.from_client_config(
+        CLIENT_JSON,
+        scopes=SCOPES,
+        redirect_uri=url_for("oauth_callback", _external=True)
+    )
+
+    auth_url, state = flow.authorization_url(
+        access_type="offline",
+        prompt="consent"
+    )
+
+    session["oauth_state"] = state
+    return redirect(auth_url)
 
     flow = Flow.from_client_config(
         CLIENT_JSON,
