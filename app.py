@@ -87,40 +87,34 @@ def init_db():
 init_db()
 
 # ==================================================
-# GOOGLE DRIVE CONFIG
+# GOOGLE DRIVE (TOKEN GLOBAL - INSTITUCIONAL)
 # ==================================================
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 CLIENT_JSON = json.loads(os.environ.get("GOOGLE_CREDENTIALS_JSON"))
+TOKEN_FILE = "token.json"
 
 def get_drive_service():
-    if "google_token" not in session:
-        raise Exception("Drive não autorizado")
+    if not os.path.exists(TOKEN_FILE):
+        raise Exception("Google Drive ainda não autorizado")
 
-    creds = Credentials.from_authorized_user_info(
-        session["google_token"], SCOPES
-    )
+    creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
 
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
-        session["google_token"] = json.loads(creds.to_json())
+        with open(TOKEN_FILE, "w") as token:
+            token.write(creds.to_json())
 
     return build("drive", "v3", credentials=creds)
 
-def get_drive_service_safe():
-    try:
-        return get_drive_service()
-    except Exception:
-        return None
-
 def get_or_create_folder(drive, name, parent_id=None):
-    query = f"name='{name}' and mimeType='application/vnd.google-apps.folder'"
+    q = f"name='{name}' and mimeType='application/vnd.google-apps.folder'"
     if parent_id:
-        query += f" and '{parent_id}' in parents"
+        q += f" and '{parent_id}' in parents"
 
     result = drive.files().list(
-        q=query,
+        q=q,
         spaces="drive",
-        fields="files(id, name)"
+        fields="files(id)"
     ).execute()
 
     files = result.get("files", [])
@@ -143,23 +137,12 @@ def get_or_create_folder(drive, name, parent_id=None):
     return folder["id"]
 
 # ==================================================
-# GOOGLE OAUTH
+# GOOGLE OAUTH (APENAS ADMIN)
 # ==================================================
 @app.route("/autorizar-google")
 def autorizar_google():
-    flow = Flow.from_client_config(
-        CLIENT_JSON,
-        scopes=SCOPES,
-        redirect_uri=url_for("oauth_callback", _external=True)
-    )
-
-    auth_url, state = flow.authorization_url(
-        access_type="offline",
-        prompt="consent"
-    )
-
-    session["oauth_state"] = state
-    return redirect(auth_url)
+    if session.get("role") != "admin":
+        return redirect("/dashboard")
 
     flow = Flow.from_client_config(
         CLIENT_JSON,
@@ -167,12 +150,11 @@ def autorizar_google():
         redirect_uri=url_for("oauth_callback", _external=True)
     )
 
-    auth_url, state = flow.authorization_url(
+    auth_url, _ = flow.authorization_url(
         access_type="offline",
         prompt="consent"
     )
 
-    session["oauth_state"] = state
     return redirect(auth_url)
 
 @app.route("/oauth2callback")
@@ -180,13 +162,13 @@ def oauth_callback():
     flow = Flow.from_client_config(
         CLIENT_JSON,
         scopes=SCOPES,
-        state=session.get("oauth_state"),
         redirect_uri=url_for("oauth_callback", _external=True)
     )
 
     flow.fetch_token(authorization_response=request.url)
-    creds = flow.credentials
-    session["google_token"] = json.loads(creds.to_json())
+
+    with open(TOKEN_FILE, "w") as token:
+        token.write(flow.credentials.to_json())
 
     return redirect("/dashboard")
 
@@ -208,7 +190,7 @@ def login():
             session["role"] = user["role"]
             return redirect("/dashboard")
 
-        return "Login inválido"
+        return "Usuário ou senha inválidos"
 
     return render_template("login.html")
 
@@ -227,10 +209,13 @@ def dashboard():
 
     conn = get_db()
     cur = conn.cursor()
+
     cur.execute("SELECT * FROM solicitacoes ORDER BY id DESC")
     solicitacoes = cur.fetchall()
-    cur.execute("SELECT * FROM comunicados ORDER BY id DESC")
+
+    cur.execute("SELECT * FROM comunicados ORDER BY data DESC")
     comunicados = cur.fetchall()
+
     cur.close()
     conn.close()
 
@@ -242,16 +227,12 @@ def dashboard():
     )
 
 # ==================================================
-# ENVIO DE ARQUIVO (COM PASTAS NO DRIVE)
+# ENVIO DE ARQUIVO (ESCOLA - SEM OAUTH)
 # ==================================================
 @app.route("/enviar/<int:id>", methods=["GET","POST"])
 def enviar(id):
     if session.get("role") != "escola":
         return redirect("/dashboard")
-
-    drive = get_drive_service_safe()
-    if not drive:
-        return redirect("/autorizar-google")
 
     conn = get_db()
     cur = conn.cursor()
@@ -259,12 +240,16 @@ def enviar(id):
     solicitacao = cur.fetchone()
 
     if request.method == "POST":
+        try:
+            drive = get_drive_service()
+        except Exception:
+            return "<h3>O Google Drive ainda não foi autorizado pela secretaria.</h3>"
+
         file = request.files["arquivo"]
         filename = secure_filename(file.filename)
         temp_path = f"/tmp/{filename}"
         file.save(temp_path)
 
-        # === CRIA ESTRUTURA DE PASTAS ===
         pasta_ano = get_or_create_folder(drive, "2026")
         pasta_solic = get_or_create_folder(drive, "SOLICITACOES", pasta_ano)
         pasta_titulo = get_or_create_folder(drive, solicitacao["titulo"], pasta_solic)
@@ -272,10 +257,7 @@ def enviar(id):
 
         media = MediaFileUpload(temp_path)
         uploaded = drive.files().create(
-            body={
-                "name": filename,
-                "parents": [pasta_escola]
-            },
+            body={"name": filename, "parents": [pasta_escola]},
             media_body=media,
             fields="webViewLink"
         ).execute()
@@ -298,7 +280,7 @@ def enviar(id):
 
         return f"""
         <h3>Arquivo enviado com sucesso em {datetime.now().strftime('%d/%m/%Y às %H:%M')}</h3>
-        <a href="/dashboard">Voltar</a>
+        <a href="/dashboard">Voltar ao painel</a>
         """
 
     cur.close()
