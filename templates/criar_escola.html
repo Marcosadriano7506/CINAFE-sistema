@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Cadastrar Escola - CINAFE</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="header">
+    <h1>CINAFE</h1>
+    <p>Centro de Informações do Núcleo de Avaliação e Formação Educacional</p>
+</div>
+
+<div class="container">
+    <h2>🏫 Cadastrar Escola</h2>
+
+    <form method="POST">
+        <label>Nome da Escola</label><br>
+        <input type="text" name="nome" required style="width:100%; padding:10px;"><br><br>
+
+        <label>Código de Login</label><br>
+        <input type="text" name="codigo" required style="width:100%; padding:10px;"><br><br>
+
+        <button class="btn">Cadastrar Escola</button>
+        <a href="/dashboard" class="btn red">Cancelar</a>
+    </form>
+</div>
+
+</body>
+</html>
