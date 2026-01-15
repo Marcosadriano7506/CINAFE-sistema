@@ -1,6 +1,5 @@
-flask
+Flask
 gunicorn
-werkzeug
-google-api-python-client
-google-auth
-google-auth-oauthlib
+psycopg2-binary
+Werkzeug
+
