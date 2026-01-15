@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Enviar Arquivo - CINAFE</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="header">
+    <h1>CINAFE</h1>
+    <p>Centro de Informações do Núcleo de Avaliação e Formação Educacional</p>
+</div>
+
+<div class="container">
+    <h2>📤 Enviar Arquivo</h2>
+
+    <p><strong>Solicitação:</strong> {{ solicitacao.titulo }}</p>
+    <p><strong>Prazo:</strong> {{ solicitacao.prazo }}</p>
+
+    <form method="POST" enctype="multipart/form-data">
+        <input type="file" name="arquivo" required><br><br>
+        <button class="btn">Enviar Arquivo</button>
+        <a href="/dashboard" class="btn red">Cancelar</a>
+    </form>
+</div>
+
+</body>
+</html>
