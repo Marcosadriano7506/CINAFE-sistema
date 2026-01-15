@@ -1,9 +1,9 @@
 from flask import Flask, render_template, request, redirect, session, url_for
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 import psycopg2, psycopg2.extras
 import os, json
 from datetime import datetime
-from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
 
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
@@ -15,7 +15,7 @@ from googleapiclient.http import MediaFileUpload
 # APP
 # ==================================================
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "cinafe-secret")
+app.secret_key = os.environ.get("SECRET_KEY", "cinafe_secret")
 
 # ==================================================
 # BANCO DE DADOS (POSTGRES)
@@ -39,14 +39,16 @@ def init_db():
         username TEXT UNIQUE,
         password TEXT,
         role TEXT
-    )""")
+    )
+    """)
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS escolas (
         id SERIAL PRIMARY KEY,
         nome TEXT,
         codigo TEXT UNIQUE
-    )""")
+    )
+    """)
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS solicitacoes (
@@ -54,7 +56,8 @@ def init_db():
         titulo TEXT,
         descricao TEXT,
         prazo DATE
-    )""")
+    )
+    """)
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS envios (
@@ -63,95 +66,110 @@ def init_db():
         escola TEXT,
         arquivo TEXT,
         link_drive TEXT,
-        data_envio TIMESTAMP
-    )""")
+        data_envio TEXT
+    )
+    """)
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS comunicados (
         id SERIAL PRIMARY KEY,
         titulo TEXT,
         mensagem TEXT,
-        data TIMESTAMP
-    )""")
-
-    cur.execute("""
-    INSERT INTO users (username, password, role)
-    VALUES ('admin', %s, 'admin')
-    ON CONFLICT (username) DO NOTHING
-    """, (generate_password_hash("admin123"),))
+        data TEXT
+    )
+    """)
 
     conn.commit()
+    cur.close()
+    conn.close()
+
+def create_admin():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE username='admin'")
+    if not cur.fetchone():
+        cur.execute(
+            "INSERT INTO users (username, password, role) VALUES (%s,%s,%s)",
+            ("admin", generate_password_hash("admin123"), "admin")
+        )
+        conn.commit()
+    cur.close()
     conn.close()
 
 init_db()
+create_admin()
 
 # ==================================================
-# GOOGLE DRIVE - OAUTH
+# GOOGLE DRIVE CONFIG
 # ==================================================
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-CLIENT_CONFIG = json.loads(os.environ["GOOGLE_CREDENTIALS_JSON"])
-TOKEN_FILE = "token.json"
+CLIENT_JSON = json.loads(os.environ.get("GOOGLE_CREDENTIALS_JSON"))
 
 def get_drive_service():
-    if not os.path.exists(TOKEN_FILE):
-        return None
+    creds = None
 
-    creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+    if "google_token" in session:
+        creds = Credentials.from_authorized_user_info(
+            session["google_token"], SCOPES
+        )
 
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        with open(TOKEN_FILE, "w") as f:
-            f.write(creds.to_json())
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            session["google_token"] = json.loads(creds.to_json())
+        else:
+            raise Exception("Drive não autorizado")
 
     return build("drive", "v3", credentials=creds)
 
+def get_drive_service_safe():
+    try:
+        return get_drive_service()
+    except Exception:
+        return None
+
 # ==================================================
-# OAUTH ROTAS
+# GOOGLE OAUTH
 # ==================================================
 @app.route("/autorizar-google")
 def autorizar_google():
     flow = Flow.from_client_config(
-        CLIENT_CONFIG,
+        CLIENT_JSON,
         scopes=SCOPES,
-        redirect_uri="https://cinafe.onrender.com/oauth2callback"
+        redirect_uri=url_for("oauth_callback", _external=True)
     )
-
     auth_url, state = flow.authorization_url(
         access_type="offline",
-        include_granted_scopes="true",
         prompt="consent"
     )
-
-    session["state"] = state
+    session["oauth_state"] = state
     return redirect(auth_url)
 
 @app.route("/oauth2callback")
-def oauth2callback():
+def oauth_callback():
     flow = Flow.from_client_config(
-        CLIENT_CONFIG,
+        CLIENT_JSON,
         scopes=SCOPES,
-        state=session["state"],
-        redirect_uri="https://cinafe.onrender.com/oauth2callback"
+        state=session.get("oauth_state"),
+        redirect_uri=url_for("oauth_callback", _external=True)
     )
 
     flow.fetch_token(authorization_response=request.url)
     creds = flow.credentials
-
-    with open(TOKEN_FILE, "w") as token:
-        token.write(creds.to_json())
-
+    session["google_token"] = json.loads(creds.to_json())
     return redirect("/dashboard")
 
 # ==================================================
 # LOGIN
 # ==================================================
-@app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET","POST"])
 def login():
     if request.method == "POST":
         conn = get_db()
         cur = conn.cursor()
         cur.execute("SELECT * FROM users WHERE username=%s", (request.form["username"],))
         user = cur.fetchone()
+        cur.close()
         conn.close()
 
         if user and check_password_hash(user["password"], request.form["password"]):
@@ -178,65 +196,60 @@ def dashboard():
 
     conn = get_db()
     cur = conn.cursor()
-
     cur.execute("SELECT * FROM solicitacoes ORDER BY id DESC")
     solicitacoes = cur.fetchall()
-
     cur.execute("SELECT * FROM comunicados ORDER BY id DESC")
     comunicados = cur.fetchall()
-
+    cur.close()
     conn.close()
 
     return render_template(
         "dashboard.html",
+        role=session["role"],
         solicitacoes=solicitacoes,
-        comunicados=comunicados,
-        role=session["role"]
+        comunicados=comunicados
     )
 
 # ==================================================
-# ENVIO DE ARQUIVO
+# ENVIO DE ARQUIVO (CORRIGIDO)
 # ==================================================
-@app.route("/enviar/<int:id>", methods=["GET", "POST"])
+@app.route("/enviar/<int:id>", methods=["GET","POST"])
 def enviar(id):
     if session.get("role") != "escola":
         return redirect("/dashboard")
 
-    drive = get_drive_service()
-    if not drive:
-        return redirect("/autorizar-google")
-
     conn = get_db()
     cur = conn.cursor()
-
     cur.execute("SELECT * FROM solicitacoes WHERE id=%s", (id,))
     solicitacao = cur.fetchone()
 
     if request.method == "POST":
+        drive = get_drive_service_safe()
+        if not drive:
+            return redirect("/autorizar-google")
+
         file = request.files["arquivo"]
         filename = secure_filename(file.filename)
         temp_path = f"/tmp/{filename}"
         file.save(temp_path)
 
-        media = MediaFileUpload(temp_path, resumable=False)
+        media = MediaFileUpload(temp_path)
         uploaded = drive.files().create(
             body={"name": filename},
             media_body=media,
-            fields="id, webViewLink"
+            fields="webViewLink"
         ).execute()
+
+        link = uploaded["webViewLink"]
+        data_envio = datetime.now().strftime("%Y-%m-%d %H:%M")
 
         cur.execute("""
             INSERT INTO envios (solicitacao_id, escola, arquivo, link_drive, data_envio)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (
-            id,
-            session["user"],
-            filename,
-            uploaded["webViewLink"],
-            datetime.now()
-        ))
+            VALUES (%s,%s,%s,%s,%s)
+        """, (id, session["user"], filename, link, data_envio))
 
         conn.commit()
+        cur.close()
         conn.close()
         os.remove(temp_path)
 
@@ -245,5 +258,7 @@ def enviar(id):
         <a href="/dashboard">Voltar</a>
         """
 
+    cur.close()
     conn.close()
+
     return render_template("enviar.html", solicitacao=solicitacao)
