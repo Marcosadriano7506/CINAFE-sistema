@@ -1,29 +1,48 @@
-<h2>Controle da Solicitação</h2>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Controle da Solicitação - CINAFE</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
 
-<p><strong>{{ solicitacao.titulo }}</strong></p>
-<p>Prazo: {{ solicitacao.prazo }}</p>
+<div class="header">
+    <h1>CINAFE</h1>
+    <p>Centro de Informações do Núcleo de Avaliação e Formação Educacional</p>
+</div>
 
-<table border="1" cellpadding="8">
-    <tr>
-        <th>Escola</th>
-        <th>Status</th>
-        <th>Arquivo</th>
-    </tr>
+<div class="container">
+    <h2>📊 Controle da Solicitação</h2>
 
-    {% for r in resultado %}
-    <tr>
-        <td>{{ r.escola }}</td>
-        <td>{{ r.status }}</td>
-        <td>
-            {% if r.link %}
-                <a href="{{ r.link }}" target="_blank">Abrir no Drive</a>
-            {% else %}
-                —
-            {% endif %}
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+    <p><strong>{{ solicitacao.titulo }}</strong></p>
+    <p>Prazo: {{ solicitacao.prazo }}</p>
 
-<br>
-<a href="/dashboard">Voltar</a>
+    <table>
+        <tr>
+            <th>Escola</th>
+            <th>Status</th>
+            <th>Arquivo</th>
+        </tr>
+
+        {% for item in resultado %}
+        <tr>
+            <td>{{ item.escola }}</td>
+            <td>{{ item.status }}</td>
+            <td>
+                {% if item.link %}
+                    <a href="{{ item.link }}" target="_blank">📂 Ver no Drive</a>
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <br>
+    <a href="/dashboard" class="btn">Voltar</a>
+</div>
+
+</body>
+</html>
