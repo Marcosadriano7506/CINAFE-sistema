@@ -39,16 +39,14 @@ def init_db():
         username TEXT UNIQUE,
         password TEXT,
         role TEXT
-    )
-    """)
+    )""")
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS escolas (
         id SERIAL PRIMARY KEY,
         nome TEXT,
         codigo TEXT UNIQUE
-    )
-    """)
+    )""")
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS solicitacoes (
@@ -56,8 +54,7 @@ def init_db():
         titulo TEXT,
         descricao TEXT,
         prazo DATE
-    )
-    """)
+    )""")
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS envios (
@@ -66,38 +63,28 @@ def init_db():
         escola TEXT,
         arquivo TEXT,
         link_drive TEXT,
-        data_envio TEXT
-    )
-    """)
+        data_envio TIMESTAMP
+    )""")
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS comunicados (
         id SERIAL PRIMARY KEY,
         titulo TEXT,
         mensagem TEXT,
-        data TEXT
-    )
-    """)
+        data TIMESTAMP
+    )""")
+
+    cur.execute("""
+    INSERT INTO users (username, password, role)
+    VALUES ('admin', %s, 'admin')
+    ON CONFLICT (username) DO NOTHING
+    """, (generate_password_hash("admin123"),))
 
     conn.commit()
     cur.close()
     conn.close()
 
-def create_admin():
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE username='admin'")
-    if not cur.fetchone():
-        cur.execute(
-            "INSERT INTO users (username, password, role) VALUES (%s,%s,%s)",
-            ("admin", generate_password_hash("admin123"), "admin")
-        )
-        conn.commit()
-    cur.close()
-    conn.close()
-
 init_db()
-create_admin()
 
 # ==================================================
 # GOOGLE DRIVE CONFIG
@@ -106,19 +93,16 @@ SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 CLIENT_JSON = json.loads(os.environ.get("GOOGLE_CREDENTIALS_JSON"))
 
 def get_drive_service():
-    creds = None
+    if "google_token" not in session:
+        raise Exception("Drive não autorizado")
 
-    if "google_token" in session:
-        creds = Credentials.from_authorized_user_info(
-            session["google_token"], SCOPES
-        )
+    creds = Credentials.from_authorized_user_info(
+        session["google_token"], SCOPES
+    )
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            session["google_token"] = json.loads(creds.to_json())
-        else:
-            raise Exception("Drive não autorizado")
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        session["google_token"] = json.loads(creds.to_json())
 
     return build("drive", "v3", credentials=creds)
 
@@ -128,20 +112,55 @@ def get_drive_service_safe():
     except Exception:
         return None
 
+def get_or_create_folder(drive, name, parent_id=None):
+    query = f"name='{name}' and mimeType='application/vnd.google-apps.folder'"
+    if parent_id:
+        query += f" and '{parent_id}' in parents"
+
+    result = drive.files().list(
+        q=query,
+        spaces="drive",
+        fields="files(id, name)"
+    ).execute()
+
+    files = result.get("files", [])
+    if files:
+        return files[0]["id"]
+
+    metadata = {
+        "name": name,
+        "mimeType": "application/vnd.google-apps.folder"
+    }
+
+    if parent_id:
+        metadata["parents"] = [parent_id]
+
+    folder = drive.files().create(
+        body=metadata,
+        fields="id"
+    ).execute()
+
+    return folder["id"]
+
 # ==================================================
 # GOOGLE OAUTH
 # ==================================================
 @app.route("/autorizar-google")
 def autorizar_google():
+    if session.get("role") != "admin":
+        return redirect("/dashboard")
+
     flow = Flow.from_client_config(
         CLIENT_JSON,
         scopes=SCOPES,
         redirect_uri=url_for("oauth_callback", _external=True)
     )
+
     auth_url, state = flow.authorization_url(
         access_type="offline",
         prompt="consent"
     )
+
     session["oauth_state"] = state
     return redirect(auth_url)
 
@@ -157,6 +176,7 @@ def oauth_callback():
     flow.fetch_token(authorization_response=request.url)
     creds = flow.credentials
     session["google_token"] = json.loads(creds.to_json())
+
     return redirect("/dashboard")
 
 # ==================================================
@@ -211,12 +231,16 @@ def dashboard():
     )
 
 # ==================================================
-# ENVIO DE ARQUIVO (CORRIGIDO)
+# ENVIO DE ARQUIVO (COM PASTAS NO DRIVE)
 # ==================================================
 @app.route("/enviar/<int:id>", methods=["GET","POST"])
 def enviar(id):
     if session.get("role") != "escola":
         return redirect("/dashboard")
+
+    drive = get_drive_service_safe()
+    if not drive:
+        return redirect("/autorizar-google")
 
     conn = get_db()
     cur = conn.cursor()
@@ -224,29 +248,37 @@ def enviar(id):
     solicitacao = cur.fetchone()
 
     if request.method == "POST":
-        drive = get_drive_service_safe()
-        if not drive:
-            return redirect("/autorizar-google")
-
         file = request.files["arquivo"]
         filename = secure_filename(file.filename)
         temp_path = f"/tmp/{filename}"
         file.save(temp_path)
 
+        # === CRIA ESTRUTURA DE PASTAS ===
+        pasta_ano = get_or_create_folder(drive, "2026")
+        pasta_solic = get_or_create_folder(drive, "SOLICITACOES", pasta_ano)
+        pasta_titulo = get_or_create_folder(drive, solicitacao["titulo"], pasta_solic)
+        pasta_escola = get_or_create_folder(drive, session["user"], pasta_titulo)
+
         media = MediaFileUpload(temp_path)
         uploaded = drive.files().create(
-            body={"name": filename},
+            body={
+                "name": filename,
+                "parents": [pasta_escola]
+            },
             media_body=media,
             fields="webViewLink"
         ).execute()
 
-        link = uploaded["webViewLink"]
-        data_envio = datetime.now().strftime("%Y-%m-%d %H:%M")
-
         cur.execute("""
             INSERT INTO envios (solicitacao_id, escola, arquivo, link_drive, data_envio)
             VALUES (%s,%s,%s,%s,%s)
-        """, (id, session["user"], filename, link, data_envio))
+        """, (
+            id,
+            session["user"],
+            filename,
+            uploaded["webViewLink"],
+            datetime.now()
+        ))
 
         conn.commit()
         cur.close()
@@ -260,5 +292,4 @@ def enviar(id):
 
     cur.close()
     conn.close()
-
     return render_template("enviar.html", solicitacao=solicitacao)
