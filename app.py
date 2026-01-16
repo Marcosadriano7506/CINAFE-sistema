@@ -390,3 +390,39 @@ def enviar(id):
 
     conn.close()
     return render_template("enviar.html", solicitacao=solicitacao)
+
+@app.route("/teste-drive")
+def teste_drive():
+    try:
+        drive = get_drive_service()
+
+        file_metadata = {
+            "name": "TESTE_CINAFE.txt"
+        }
+
+        media = MediaFileUpload(
+            "/tmp/TESTE_CINAFE.txt",
+            mimetype="text/plain",
+            resumable=False
+        )
+
+        with open("/tmp/TESTE_CINAFE.txt", "w") as f:
+            f.write("Teste de upload CINAFE")
+
+        file = drive.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="webViewLink"
+        ).execute()
+
+        return f"""
+        <h3>UPLOAD FUNCIONOU</h3>
+        <a href="{file['webViewLink']}" target="_blank">Abrir arquivo no Drive</a>
+        """
+
+    except Exception as e:
+        return f"""
+        <h3>ERRO NO DRIVE</h3>
+        <pre>{str(e)}</pre>
+        """, 500
+
