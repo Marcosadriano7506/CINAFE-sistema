@@ -110,7 +110,7 @@ td {
 
 /* IMAGEM INSTITUCIONAL */
 .banner {
-    max-width: 100px;
+    max-width: 1920px;
     margin: 20px auto;
     text-align: center;
 }
@@ -124,7 +124,7 @@ td {
 
 .banner img {
     width: 100%;
-    height: 100px;        /* 🔹 controla a “finesse” do banner */
+    height: 80px;        /* 🔹 controla a “finesse” do banner */
     object-fit: cover;   /* 🔹 corta sem distorcer */
     object-position: center;
     display: block;
