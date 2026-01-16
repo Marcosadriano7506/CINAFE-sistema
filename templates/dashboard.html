@@ -15,84 +15,28 @@
 <div class="banner">
     <img src="{{ url_for('static', filename='Apresentação1.jpg') }}" alt="CINAFE">
 </div>
-    
+
 <p>
-    Usuário logado: <strong>{{ session.user }}</strong>
-    |
+    Usuário logado: <strong>{{ session.user }}</strong> |
     <a href="/logout">Sair</a>
 </p>
 
 <hr>
 
-{% if role == "admin" %}
+<!-- ================= ADMIN ================= -->
+{% if session.get("role") == "admin" %}
 
-    <h2>Painel da Secretaria</h2>
+<h2>Painel da Secretaria</h2>
 
-    <p>
-<a href="/novo-comunicado" class="btn">📢 Novo Comunicado</a>
-<a href="/nova-solicitacao" class="btn">📄 Nova Solicitação</a>
-<a href="/criar-escola" class="btn red">➕ Cadastrar Escola</a>
+<p>
+    <a href="/novo-comunicado" class="btn">📢 Novo Comunicado</a>
+    <a href="/nova-solicitacao" class="btn">📄 Nova Solicitação</a>
+    <a href="/criar-escola" class="btn red">➕ Cadastrar Escola</a>
+</p>
 
-    </p>
+<h3>Solicitações Criadas</h3>
 
-    <h3>Solicitações Criadas</h3>
-
-    {% if solicitacoes %}
-        <table border="1" cellpadding="8">
-            <tr>
-                <th>Título</th>
-                <th>Descrição</th>
-                <th>Prazo</th>
-                <th>Ações</th>
-            </tr>
-
-            {% for s in solicitacoes %}
-            <tr>
-                <td>{{ s.titulo }}</td>
-                <td>{{ s.descricao }}</td>
-                <td>{{ s.prazo }}</td>
-                <td>
-                    <a href="/controle/{{ s.id }}">📊 Controle</a>
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
-    {% else %}
-        <p>Nenhuma solicitação cadastrada.</p>
-    {% endif %}
-
-    <h3>Comunicados Oficiais</h3>
-
-{% if comunicados %}
-<table>
-    <thead>
-        <tr>
-            <th>Título</th>
-            <th>Mensagem</th>
-            <th>Data</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for c in comunicados %}
-        <tr>
-            <td>{{ c.titulo }}</td>
-            <td>{{ c.mensagem }}</td>
-            <td>
-                {% if c.data %}
-                    {{ c.data.strftime('%d/%m/%Y %H:%M') }}
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p>Nenhum comunicado publicado.</p>
-{% endif %}
-
-{% if session.get("role") == "escola" %}
-<h3>Solicitações</h3>
-
+{% if solicitacoes %}
 <table>
     <tr>
         <th>Título</th>
@@ -100,7 +44,63 @@
         <th>Prazo</th>
         <th>Ação</th>
     </tr>
+    {% for s in solicitacoes %}
+    <tr>
+        <td>{{ s.titulo }}</td>
+        <td>{{ s.descricao }}</td>
+        <td>{{ s.prazo }}</td>
+        <td>
+            <a href="/controle/{{ s.id }}">📊 Controle</a>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>Nenhuma solicitação cadastrada.</p>
+{% endif %}
 
+<h3>Comunicados Oficiais</h3>
+
+{% if comunicados %}
+<table>
+    <tr>
+        <th>Título</th>
+        <th>Mensagem</th>
+        <th>Data</th>
+    </tr>
+    {% for c in comunicados %}
+    <tr>
+        <td>{{ c.titulo }}</td>
+        <td>{{ c.mensagem }}</td>
+        <td>
+            {% if c.data %}
+                {{ c.data.strftime('%d/%m/%Y %H:%M') }}
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>Nenhum comunicado publicado.</p>
+{% endif %}
+
+{% endif %}
+
+<!-- ================= ESCOLA ================= -->
+{% if session.get("role") == "escola" %}
+
+<h2>Painel da Escola</h2>
+
+<h3>Solicitações</h3>
+
+{% if solicitacoes %}
+<table>
+    <tr>
+        <th>Título</th>
+        <th>Descrição</th>
+        <th>Prazo</th>
+        <th>Ação</th>
+    </tr>
     {% for s in solicitacoes %}
     <tr>
         <td>{{ s.titulo }}</td>
@@ -112,11 +112,9 @@
     </tr>
     {% endfor %}
 </table>
+{% else %}
+<p>Não há solicitações no momento.</p>
 {% endif %}
-
-    {% else %}
-        <p>Não há solicitações no momento.</p>
-    {% endif %}
 
 {% endif %}
 
