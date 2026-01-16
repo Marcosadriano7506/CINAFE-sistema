@@ -2,7 +2,11 @@ from flask import Flask, render_template, request, redirect, session
 import psycopg2
 import psycopg2.extras
 import os
+import json
 from datetime import datetime
+
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -15,7 +19,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "cinafe_secret")
 
 # ==================================================
-# DATABASE (POSTGRES)
+# DATABASE
 # ==================================================
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
@@ -57,6 +61,15 @@ def init_db():
     """)
 
     cur.execute("""
+    CREATE TABLE IF NOT EXISTS comunicados (
+        id SERIAL PRIMARY KEY,
+        titulo TEXT,
+        mensagem TEXT,
+        data TIMESTAMP
+    );
+    """)
+
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS envios (
         id SERIAL PRIMARY KEY,
         solicitacao_id INTEGER,
@@ -64,15 +77,6 @@ def init_db():
         arquivo TEXT,
         link_drive TEXT,
         data_envio TIMESTAMP
-    );
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS comunicados (
-        id SERIAL PRIMARY KEY,
-        titulo TEXT,
-        mensagem TEXT,
-        data TIMESTAMP
     );
     """)
 
@@ -95,15 +99,9 @@ init_db()
 create_admin()
 
 # ==================================================
-# GOOGLE DRIVE (ADMIN JÁ AUTORIZOU)
+# GOOGLE DRIVE (TOKEN VIA ENV)
 # ==================================================
-import json
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-
 PASTA_ANO = "2026"
 PASTA_SOLIC = "SOLICITACOES"
 
@@ -114,14 +112,8 @@ def get_drive_service():
         raise Exception("Google Drive não autorizado pela secretaria.")
 
     token_info = json.loads(GOOGLE_TOKEN_JSON)
-
-    creds = Credentials.from_authorized_user_info(
-        token_info,
-        scopes=SCOPES
-    )
-
+    creds = Credentials.from_authorized_user_info(token_info, scopes=SCOPES)
     return build("drive", "v3", credentials=creds)
-
 
 def get_or_create_folder(name, parent_id=None):
     drive = get_drive_service()
@@ -130,45 +122,28 @@ def get_or_create_folder(name, parent_id=None):
     if parent_id:
         query += f" and '{parent_id}' in parents"
 
-    result = drive.files().list(
-        q=query,
-        fields="files(id,name)"
-    ).execute()
+    res = drive.files().list(q=query, fields="files(id,name)").execute()
+    if res["files"]:
+        return res["files"][0]["id"]
 
-    if result["files"]:
-        return result["files"][0]["id"]
-
-    metadata = {
-        "name": name,
-        "mimeType": "application/vnd.google-apps.folder"
-    }
-
+    body = {"name": name, "mimeType": "application/vnd.google-apps.folder"}
     if parent_id:
-        metadata["parents"] = [parent_id]
+        body["parents"] = [parent_id]
 
-    folder = drive.files().create(
-        body=metadata,
-        fields="id"
-    ).execute()
-
+    folder = drive.files().create(body=body, fields="id").execute()
     return folder["id"]
-
 
 def upload_to_drive(path, filename, solicitacao, escola):
     drive = get_drive_service()
 
     ano_id = get_or_create_folder(PASTA_ANO)
-    raiz_solic = get_or_create_folder(PASTA_SOLIC, ano_id)
-    pasta_solic = get_or_create_folder(solicitacao, raiz_solic)
+    raiz = get_or_create_folder(PASTA_SOLIC, ano_id)
+    pasta_solic = get_or_create_folder(solicitacao, raiz)
     pasta_escola = get_or_create_folder(escola, pasta_solic)
 
     media = MediaFileUpload(path, resumable=False)
-
     file = drive.files().create(
-        body={
-            "name": filename,
-            "parents": [pasta_escola]
-        },
+        body={"name": filename, "parents": [pasta_escola]},
         media_body=media,
         fields="webViewLink"
     ).execute()
@@ -176,39 +151,34 @@ def upload_to_drive(path, filename, solicitacao, escola):
     return file["webViewLink"]
 
 # ==================================================
-# LOGIN
+# LOGIN / LOGOUT
 # ==================================================
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
+        username = request.form["username"]
+        password = request.form["password"]
 
         conn = get_db()
         cur = conn.cursor()
-
-        cur.execute("""
-            SELECT username, role
-            FROM users
-            WHERE username = %s
-            AND password = crypt(%s, password)
-        """, (username, password))
-
+        cur.execute("SELECT * FROM users WHERE username=%s", (username,))
         user = cur.fetchone()
         conn.close()
 
-        if user:
+        if user and check_password_hash(user["password"], password):
             session.clear()
             session["user"] = user["username"]
             session["role"] = user["role"]
             return redirect("/dashboard")
 
-        return render_template(
-            "login.html",
-            erro="Usuário ou senha inválidos"
-        )
+        return render_template("login.html", erro="Usuário ou senha inválidos")
 
     return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/")
 
 # ==================================================
 # DASHBOARD
@@ -272,8 +242,10 @@ def criar_escola():
         conn = get_db()
         cur = conn.cursor()
 
-        cur.execute("INSERT INTO escolas (nome, codigo) VALUES (%s,%s)",
-                    (request.form["nome"], codigo))
+        cur.execute(
+            "INSERT INTO escolas (nome, codigo) VALUES (%s,%s)",
+            (request.form["nome"], codigo)
+        )
 
         cur.execute(
             "INSERT INTO users (username,password,role) VALUES (%s,%s,%s)",
@@ -309,56 +281,12 @@ def nova_solicitacao():
     return render_template("nova_solicitacao.html")
 
 # ==================================================
-# CONTROLE (SECRETARIA)
-# ==================================================
-@app.route("/controle/<int:id>")
-def controle(id):
-    if session.get("role") != "admin":
-        return redirect("/")
-
-    conn = get_db()
-    cur = conn.cursor()
-
-    cur.execute("SELECT * FROM solicitacoes WHERE id=%s", (id,))
-    solicitacao = cur.fetchone()
-
-    cur.execute("SELECT codigo FROM escolas")
-    escolas = cur.fetchall()
-
-    cur.execute("SELECT * FROM envios WHERE solicitacao_id=%s", (id,))
-    envios = cur.fetchall()
-
-    envios_map = {e["escola"]: e for e in envios}
-
-    resultado = []
-    for e in escolas:
-        codigo = e["codigo"]
-        envio = envios_map.get(codigo)
-
-        if envio:
-            status = "Enviado"
-            link = envio["link_drive"]
-        else:
-            status = "Pendente"
-            link = None
-
-        resultado.append({
-            "escola": codigo,
-            "status": status,
-            "link": link
-        })
-
-    conn.close()
-
-    return render_template("controle.html", solicitacao=solicitacao, resultado=resultado)
-
-# ==================================================
 # ENVIO (ESCOLA)
 # ==================================================
 @app.route("/enviar/<int:id>", methods=["GET", "POST"])
 def enviar(id):
     if session.get("role") != "escola":
-        return redirect("/")
+        return redirect("/dashboard")
 
     conn = get_db()
     cur = conn.cursor()
@@ -371,13 +299,8 @@ def enviar(id):
         return "Solicitação não encontrada", 404
 
     if request.method == "POST":
-        if "arquivo" not in request.files:
-            conn.close()
-            return "Nenhum arquivo enviado", 400
-
-        file = request.files["arquivo"]
-
-        if file.filename == "":
+        file = request.files.get("arquivo")
+        if not file or file.filename == "":
             conn.close()
             return "Arquivo inválido", 400
 
@@ -388,7 +311,6 @@ def enviar(id):
             file.save(temp_path)
 
             data_envio = datetime.now()
-
             link = upload_to_drive(
                 temp_path,
                 filename,
@@ -409,11 +331,9 @@ def enviar(id):
             ))
 
             conn.commit()
-
             os.remove(temp_path)
 
             msg = f"Arquivo enviado com sucesso em {data_envio.strftime('%d/%m/%Y às %H:%M')}"
-
             return render_template("envio_sucesso.html", mensagem=msg)
 
         except Exception as e:
@@ -425,39 +345,3 @@ def enviar(id):
 
     conn.close()
     return render_template("enviar.html", solicitacao=solicitacao)
-
-@app.route("/teste-drive")
-def teste_drive():
-    try:
-        drive = get_drive_service()
-
-        file_metadata = {
-            "name": "TESTE_CINAFE.txt"
-        }
-
-        media = MediaFileUpload(
-            "/tmp/TESTE_CINAFE.txt",
-            mimetype="text/plain",
-            resumable=False
-        )
-
-        with open("/tmp/TESTE_CINAFE.txt", "w") as f:
-            f.write("Teste de upload CINAFE")
-
-        file = drive.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields="webViewLink"
-        ).execute()
-
-        return f"""
-        <h3>UPLOAD FUNCIONOU</h3>
-        <a href="{file['webViewLink']}" target="_blank">Abrir arquivo no Drive</a>
-        """
-
-    except Exception as e:
-        return f"""
-        <h3>ERRO NO DRIVE</h3>
-        <pre>{str(e)}</pre>
-        """, 500
-
