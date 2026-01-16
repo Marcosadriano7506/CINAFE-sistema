@@ -90,28 +90,31 @@
 <p>Nenhum comunicado publicado.</p>
 {% endif %}
 
-    <h3>Solicitações</h3>
+    {% if role == "escola" %}
+    
+<h3>Solicitações</h3>
 
-    {% if solicitacoes %}
-        <table border="1" cellpadding="8">
-            <tr>
-                <th>Título</th>
-                <th>Descrição</th>
-                <th>Prazo</th>
-                <th>Ação</th>
-            </tr>
+<table>
+    <tr>
+        <th>Título</th>
+        <th>Descrição</th>
+        <th>Prazo</th>
+        <th>Ação</th>
+    </tr>
 
-            {% for s in solicitacoes %}
-            <tr>
-                <td>{{ s.titulo }}</td>
-                <td>{{ s.descricao }}</td>
-                <td>{{ s.prazo }}</td>
-                <td>
-                    <a href="/enviar/{{ s.id }}">📤 Enviar Arquivo</a>
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
+    {% for s in solicitacoes %}
+    <tr>
+        <td>{{ s.titulo }}</td>
+        <td>{{ s.descricao }}</td>
+        <td>{{ s.prazo }}</td>
+        <td>
+            <a href="/enviar/{{ s.id }}">📤 Enviar Arquivo</a>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+
     {% else %}
         <p>Não há solicitações no momento.</p>
     {% endif %}
