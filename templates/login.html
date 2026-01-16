@@ -1,56 +1,65 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>CINAFE | Acesso ao Sistema</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>CINAFE - Acesso ao Sistema</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
-    <!-- HEADER IGUAL AO DASHBOARD -->
-    <div class="header">
-        <h1>CINAFE</h1>
-        <p>Centro de Informações do Núcleo de Avaliação e Formação Educacional</p>
-    </div>
+<!-- HEADER AZUL (IGUAL AO DASHBOARD) -->
+<div class="header">
+    <h1>CINAFE</h1>
+    <p>Centro de Informações do Núcleo de Avaliação e Formação Educacional</p>
+</div>
 
-    <!-- BANNER INSTITUCIONAL -->
-    <div class="banner">
-        <img src="{{ url_for('static', filename='Apresentação1.jpg') }}" alt="CINAFE">
-    </div>
+<!-- BANNER INSTITUCIONAL -->
+<div class="banner">
+    <img src="{{ url_for('static', filename='Apresentação1.jpg') }}" alt="CINAFE - NAFE - Secretaria de Educação">
+</div>
 
-    <!-- CONTAINER PADRÃO -->
-    <div class="container">
+<!-- CONTAINER -->
+<div class="container" style="max-width: 420px; text-align: center;">
+    <h2>Acesso ao Sistema</h2>
 
-        <h2>Acesso ao Sistema</h2>
+    <form method="POST">
+        <div style="text-align:left; margin-bottom:10px;">
+            <label>Usuário</label>
+            <input
+                type="text"
+                name="username"
+                required
+                style="width:100%; padding:8px;"
+            >
+        </div>
 
-        <form method="POST">
-            <table style="max-width:400px;">
-                <tr>
-                    <td>Usuário</td>
-                    <td>
-                        <input type="text" name="username" required style="width:100%; padding:8px;">
-                    </td>
-                </tr>
-                <tr>
-                    <td>Senha</td>
-                    <td>
-                        <input type="password" name="password" required style="width:100%; padding:8px;">
-                    </td>
-                </tr>
-                <tr>
-                    <td></td>
-                    <td style="padding-top:10px;">
-                        <button class="btn">Entrar</button>
-                    </td>
-                </tr>
-            </table>
-        </form>
+        <div style="text-align:left; margin-bottom:15px;">
+            <label>Senha</label>
+            <input
+                type="password"
+                name="password"
+                required
+                style="width:100%; padding:8px;"
+            >
+        </div>
 
-        <p style="margin-top:20px; font-size:13px; color:#666;">
-            © 2026 CINAFE
-        </p>
-
-    </div>
+        <button class="btn" style="width:100%;">Entrar</button>
+    </form>
+</div>
+    
+<!-- RODAPÉ -->
+<footer style="
+    margin-top: 40px;
+    padding: 15px;
+    text-align: center;
+    font-size: 12px;
+    color: #555;
+">
+    © Criado por <strong>Marcos Adriano Marques Silva</strong> 2026.  
+    Cedido ao <strong>NAFE – Núcleo de Avaliação e Formação Educacional</strong> /  
+    Secretaria Municipal de Educação /  
+    Riacho de Santana – Bahia
+</footer>
 
 </body>
 </html>
