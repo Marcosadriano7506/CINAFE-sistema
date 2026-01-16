@@ -211,14 +211,6 @@ def login():
     return render_template("login.html")
 
 # ==================================================
-# LOGOUT
-# ==================================================
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect("/")
-
-# ==================================================
 # DASHBOARD
 # ==================================================
 @app.route("/dashboard")
