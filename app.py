@@ -99,16 +99,26 @@ create_admin()
 # ==================================================
 # GOOGLE DRIVE (ADMIN JÁ AUTORIZOU)
 # ==================================================
+import json
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-TOKEN_FILE = "token.json"
+
+GOOGLE_TOKEN_JSON = os.environ.get("GOOGLE_TOKEN_JSON")
 
 PASTA_ANO = "2026"
 PASTA_SOLIC = "SOLICITACOES"
 
+
 def get_drive_service():
-    if not os.path.exists(TOKEN_FILE):
+    if not GOOGLE_TOKEN_JSON:
         raise Exception("Google Drive não autorizado pela secretaria.")
-    creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+
+    token_data = json.loads(GOOGLE_TOKEN_JSON)
+    creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+
     return build("drive", "v3", credentials=creds)
 
 def get_or_create_folder(name, parent_id=None):
