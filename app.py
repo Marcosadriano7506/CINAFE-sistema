@@ -1,13 +1,12 @@
-from flask import Flask, render_template, request, redirect, session, url_for
+from flask import Flask, render_template, request, redirect, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-import psycopg2, psycopg2.extras
-import os, json
+import psycopg2
+import psycopg2.extras
+import os
 from datetime import datetime
 
-from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
@@ -18,7 +17,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "cinafe_secret")
 
 # ==================================================
-# BANCO DE DADOS (POSTGRES)
+# DATABASE (POSTGRES)
 # ==================================================
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
@@ -39,14 +38,16 @@ def init_db():
         username TEXT UNIQUE,
         password TEXT,
         role TEXT
-    )""")
+    );
+    """)
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS escolas (
         id SERIAL PRIMARY KEY,
         nome TEXT,
         codigo TEXT UNIQUE
-    )""")
+    );
+    """)
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS solicitacoes (
@@ -54,7 +55,8 @@ def init_db():
         titulo TEXT,
         descricao TEXT,
         prazo DATE
-    )""")
+    );
+    """)
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS envios (
@@ -64,7 +66,8 @@ def init_db():
         arquivo TEXT,
         link_drive TEXT,
         data_envio TIMESTAMP
-    )""")
+    );
+    """)
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS comunicados (
@@ -72,117 +75,86 @@ def init_db():
         titulo TEXT,
         mensagem TEXT,
         data TIMESTAMP
-    )""")
-
-    cur.execute("""
-    INSERT INTO users (username, password, role)
-    VALUES ('admin', %s, 'admin')
-    ON CONFLICT (username) DO NOTHING
-    """, (generate_password_hash("admin123"),))
+    );
+    """)
 
     conn.commit()
-    cur.close()
+    conn.close()
+
+def create_admin():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE username='admin'")
+    if not cur.fetchone():
+        cur.execute(
+            "INSERT INTO users (username, password, role) VALUES (%s,%s,%s)",
+            ("admin", generate_password_hash("admin123"), "admin")
+        )
+        conn.commit()
     conn.close()
 
 init_db()
+create_admin()
 
 # ==================================================
-# GOOGLE DRIVE (TOKEN GLOBAL - INSTITUCIONAL)
+# GOOGLE DRIVE (ADMIN JÁ AUTORIZOU)
 # ==================================================
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-CLIENT_JSON = json.loads(os.environ.get("GOOGLE_CREDENTIALS_JSON"))
 TOKEN_FILE = "token.json"
+
+PASTA_ANO = "2026"
+PASTA_SOLIC = "SOLICITACOES"
 
 def get_drive_service():
     if not os.path.exists(TOKEN_FILE):
-        raise Exception("Google Drive ainda não autorizado")
-
+        raise Exception("Google Drive não autorizado pela secretaria.")
     creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        with open(TOKEN_FILE, "w") as token:
-            token.write(creds.to_json())
-
     return build("drive", "v3", credentials=creds)
 
-def get_or_create_folder(drive, name, parent_id=None):
+def get_or_create_folder(name, parent_id=None):
+    drive = get_drive_service()
     q = f"name='{name}' and mimeType='application/vnd.google-apps.folder'"
     if parent_id:
         q += f" and '{parent_id}' in parents"
 
-    result = drive.files().list(
-        q=q,
-        spaces="drive",
-        fields="files(id)"
-    ).execute()
+    res = drive.files().list(q=q, fields="files(id,name)").execute()
+    if res["files"]:
+        return res["files"][0]["id"]
 
-    files = result.get("files", [])
-    if files:
-        return files[0]["id"]
-
-    metadata = {
-        "name": name,
-        "mimeType": "application/vnd.google-apps.folder"
-    }
-
+    meta = {"name": name, "mimeType": "application/vnd.google-apps.folder"}
     if parent_id:
-        metadata["parents"] = [parent_id]
+        meta["parents"] = [parent_id]
 
-    folder = drive.files().create(
-        body=metadata,
-        fields="id"
-    ).execute()
-
+    folder = drive.files().create(body=meta, fields="id").execute()
     return folder["id"]
 
-# ==================================================
-# GOOGLE OAUTH (APENAS ADMIN)
-# ==================================================
-@app.route("/autorizar-google")
-def autorizar_google():
-    if session.get("role") != "admin":
-        return redirect("/dashboard")
+def upload_to_drive(path, filename, solicitacao, escola):
+    drive = get_drive_service()
 
-    flow = Flow.from_client_config(
-        CLIENT_JSON,
-        scopes=SCOPES,
-        redirect_uri=url_for("oauth_callback", _external=True)
-    )
+    ano_id = get_or_create_folder(PASTA_ANO)
+    solic_root = get_or_create_folder(PASTA_SOLIC, ano_id)
+    pasta_solic = get_or_create_folder(solicitacao, solic_root)
+    pasta_escola = get_or_create_folder(escola, pasta_solic)
 
-    auth_url, _ = flow.authorization_url(
-        access_type="offline",
-        prompt="consent"
-    )
+    media = MediaFileUpload(path, resumable=False)
+    file = drive.files().create(
+        body={"name": filename, "parents": [pasta_escola]},
+        media_body=media,
+        fields="webViewLink"
+    ).execute()
 
-    return redirect(auth_url)
-
-@app.route("/oauth2callback")
-def oauth_callback():
-    flow = Flow.from_client_config(
-        CLIENT_JSON,
-        scopes=SCOPES,
-        redirect_uri=url_for("oauth_callback", _external=True)
-    )
-
-    flow.fetch_token(authorization_response=request.url)
-
-    with open(TOKEN_FILE, "w") as token:
-        token.write(flow.credentials.to_json())
-
-    return redirect("/dashboard")
+    return file["webViewLink"]
 
 # ==================================================
 # LOGIN
 # ==================================================
-@app.route("/", methods=["GET","POST"])
+@app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         conn = get_db()
         cur = conn.cursor()
         cur.execute("SELECT * FROM users WHERE username=%s", (request.form["username"],))
         user = cur.fetchone()
-        cur.close()
         conn.close()
 
         if user and check_password_hash(user["password"], request.form["password"]):
@@ -216,7 +188,6 @@ def dashboard():
     cur.execute("SELECT * FROM comunicados ORDER BY data DESC")
     comunicados = cur.fetchall()
 
-    cur.close()
     conn.close()
 
     return render_template(
@@ -227,12 +198,128 @@ def dashboard():
     )
 
 # ==================================================
-# ENVIO DE ARQUIVO (ESCOLA - SEM OAUTH)
+# COMUNICADOS
 # ==================================================
-@app.route("/enviar/<int:id>", methods=["GET","POST"])
+@app.route("/novo-comunicado", methods=["GET", "POST"])
+def novo_comunicado():
+    if session.get("role") != "admin":
+        return redirect("/dashboard")
+
+    if request.method == "POST":
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO comunicados (titulo, mensagem, data) VALUES (%s,%s,%s)",
+            (request.form["titulo"], request.form["mensagem"], datetime.now())
+        )
+        conn.commit()
+        conn.close()
+        return redirect("/dashboard")
+
+    return render_template("novo_comunicado.html")
+
+# ==================================================
+# ESCOLAS
+# ==================================================
+@app.route("/criar-escola", methods=["GET", "POST"])
+def criar_escola():
+    if session.get("role") != "admin":
+        return redirect("/")
+
+    if request.method == "POST":
+        codigo = request.form["codigo"].lower()
+        senha = f"{codigo}@123"
+
+        conn = get_db()
+        cur = conn.cursor()
+
+        cur.execute("INSERT INTO escolas (nome, codigo) VALUES (%s,%s)",
+                    (request.form["nome"], codigo))
+
+        cur.execute(
+            "INSERT INTO users (username,password,role) VALUES (%s,%s,%s)",
+            (codigo, generate_password_hash(senha), "escola")
+        )
+
+        conn.commit()
+        conn.close()
+
+        return f"Login: {codigo} | Senha: {senha}"
+
+    return render_template("criar_escola.html")
+
+# ==================================================
+# SOLICITAÇÕES
+# ==================================================
+@app.route("/nova-solicitacao", methods=["GET", "POST"])
+def nova_solicitacao():
+    if session.get("role") != "admin":
+        return redirect("/")
+
+    if request.method == "POST":
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO solicitacoes (titulo,descricao,prazo) VALUES (%s,%s,%s)",
+            (request.form["titulo"], request.form["descricao"], request.form["prazo"])
+        )
+        conn.commit()
+        conn.close()
+        return redirect("/dashboard")
+
+    return render_template("nova_solicitacao.html")
+
+# ==================================================
+# CONTROLE (SECRETARIA)
+# ==================================================
+@app.route("/controle/<int:id>")
+def controle(id):
+    if session.get("role") != "admin":
+        return redirect("/")
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM solicitacoes WHERE id=%s", (id,))
+    solicitacao = cur.fetchone()
+
+    cur.execute("SELECT codigo FROM escolas")
+    escolas = cur.fetchall()
+
+    cur.execute("SELECT * FROM envios WHERE solicitacao_id=%s", (id,))
+    envios = cur.fetchall()
+
+    envios_map = {e["escola"]: e for e in envios}
+
+    resultado = []
+    for e in escolas:
+        codigo = e["codigo"]
+        envio = envios_map.get(codigo)
+
+        if envio:
+            status = "Enviado"
+            link = envio["link_drive"]
+        else:
+            status = "Pendente"
+            link = None
+
+        resultado.append({
+            "escola": codigo,
+            "status": status,
+            "link": link
+        })
+
+    conn.close()
+
+    return render_template("controle.html", solicitacao=solicitacao, resultado=resultado)
+
+# ==================================================
+# ENVIO (ESCOLA)
+# ==================================================
+@app.route("/enviar/<int:id>", methods=["GET", "POST"])
 def enviar(id):
     if session.get("role") != "escola":
-        return redirect("/dashboard")
+        return redirect("/")
 
     conn = get_db()
     cur = conn.cursor()
@@ -240,49 +327,34 @@ def enviar(id):
     solicitacao = cur.fetchone()
 
     if request.method == "POST":
-        try:
-            drive = get_drive_service()
-        except Exception:
-            return "<h3>O Google Drive ainda não foi autorizado pela secretaria.</h3>"
-
         file = request.files["arquivo"]
         filename = secure_filename(file.filename)
         temp_path = f"/tmp/{filename}"
         file.save(temp_path)
 
-        pasta_ano = get_or_create_folder(drive, "2026")
-        pasta_solic = get_or_create_folder(drive, "SOLICITACOES", pasta_ano)
-        pasta_titulo = get_or_create_folder(drive, solicitacao["titulo"], pasta_solic)
-        pasta_escola = get_or_create_folder(drive, session["user"], pasta_titulo)
-
-        media = MediaFileUpload(temp_path)
-        uploaded = drive.files().create(
-            body={"name": filename, "parents": [pasta_escola]},
-            media_body=media,
-            fields="webViewLink"
-        ).execute()
-
-        cur.execute("""
-            INSERT INTO envios (solicitacao_id, escola, arquivo, link_drive, data_envio)
-            VALUES (%s,%s,%s,%s,%s)
-        """, (
-            id,
-            session["user"],
+        data_envio = datetime.now()
+        link = upload_to_drive(
+            temp_path,
             filename,
-            uploaded["webViewLink"],
-            datetime.now()
-        ))
+            solicitacao["titulo"],
+            session["user"]
+        )
 
+        cur.execute(
+            """INSERT INTO envios
+               (solicitacao_id, escola, arquivo, link_drive, data_envio)
+               VALUES (%s,%s,%s,%s,%s)""",
+            (id, session["user"], filename, link, data_envio)
+        )
         conn.commit()
-        cur.close()
         conn.close()
+
         os.remove(temp_path)
 
         return render_template(
-    "envio_sucesso.html",
-    mensagem=msg
-)
+            "envio_sucesso.html",
+            mensagem=f"Arquivo enviado com sucesso em {data_envio.strftime('%d/%m/%Y às %H:%M')}"
+        )
 
-    cur.close()
     conn.close()
     return render_template("enviar.html", solicitacao=solicitacao)
