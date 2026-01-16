@@ -355,38 +355,66 @@ def enviar(id):
 
     conn = get_db()
     cur = conn.cursor()
+
     cur.execute("SELECT * FROM solicitacoes WHERE id=%s", (id,))
     solicitacao = cur.fetchone()
 
+    if not solicitacao:
+        conn.close()
+        return "Solicitação não encontrada", 404
+
     if request.method == "POST":
+        if "arquivo" not in request.files:
+            conn.close()
+            return "Nenhum arquivo enviado", 400
+
         file = request.files["arquivo"]
+
+        if file.filename == "":
+            conn.close()
+            return "Arquivo inválido", 400
+
         filename = secure_filename(file.filename)
         temp_path = f"/tmp/{filename}"
-        file.save(temp_path)
 
-        data_envio = datetime.now()
-        link = upload_to_drive(
-            temp_path,
-            filename,
-            solicitacao["titulo"],
-            session["user"]
-        )
+        try:
+            file.save(temp_path)
 
-        cur.execute(
-            """INSERT INTO envios
-               (solicitacao_id, escola, arquivo, link_drive, data_envio)
-               VALUES (%s,%s,%s,%s,%s)""",
-            (id, session["user"], filename, link, data_envio)
-        )
-        conn.commit()
-        conn.close()
+            data_envio = datetime.now()
 
-        os.remove(temp_path)
+            link = upload_to_drive(
+                temp_path,
+                filename,
+                solicitacao["titulo"],
+                session["user"]
+            )
 
-        return render_template(
-            "envio_sucesso.html",
-            mensagem=f"Arquivo enviado com sucesso em {data_envio.strftime('%d/%m/%Y às %H:%M')}"
-        )
+            cur.execute("""
+                INSERT INTO envios
+                (solicitacao_id, escola, arquivo, link_drive, data_envio)
+                VALUES (%s,%s,%s,%s,%s)
+            """, (
+                id,
+                session["user"],
+                filename,
+                link,
+                data_envio
+            ))
+
+            conn.commit()
+
+            os.remove(temp_path)
+
+            msg = f"Arquivo enviado com sucesso em {data_envio.strftime('%d/%m/%Y às %H:%M')}"
+
+            return render_template("envio_sucesso.html", mensagem=msg)
+
+        except Exception as e:
+            conn.rollback()
+            return f"<pre>ERRO NO ENVIO:\n{str(e)}</pre>", 500
+
+        finally:
+            conn.close()
 
     conn.close()
     return render_template("enviar.html", solicitacao=solicitacao)
