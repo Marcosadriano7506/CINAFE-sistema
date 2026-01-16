@@ -188,10 +188,16 @@ def login():
         user = cur.fetchone()
         conn.close()
 
-        if user and check_password_hash(user["password"], request.form["password"]):
-            session["user"] = user["username"]
-            session["role"] = user["role"]
-            return redirect("/dashboard")
+        cur.execute(
+    "SELECT * FROM users WHERE username=%s AND password = crypt(%s, password)",
+    (request.form["username"], request.form["password"])
+)
+user = cur.fetchone()
+
+if user:
+    session["user"] = user["username"]
+    session["role"] = user["role"]
+    return redirect("/dashboard")
 
         return "Usuário ou senha inválidos"
 
