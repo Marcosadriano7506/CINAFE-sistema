@@ -1,6 +1,4 @@
 from flask import Flask, render_template, request, redirect, session
-from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
 import psycopg2
 import psycopg2.extras
 import os
@@ -188,17 +186,27 @@ def login():
 
         conn = get_db()
         cur = conn.cursor()
-        cur.execute("SELECT * FROM users WHERE username = %s", (username,))
+
+        cur.execute("""
+            SELECT username, role
+            FROM users
+            WHERE username = %s
+            AND password = crypt(%s, password)
+        """, (username, password))
+
         user = cur.fetchone()
         conn.close()
 
-        if user and check_password_hash(user["password"], password):
+        if user:
             session.clear()
             session["user"] = user["username"]
             session["role"] = user["role"]
             return redirect("/dashboard")
 
-        return render_template("login.html", erro="Usuário ou senha inválidos")
+        return render_template(
+            "login.html",
+            erro="Usuário ou senha inválidos"
+        )
 
     return render_template("login.html")
 
