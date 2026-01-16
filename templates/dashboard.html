@@ -59,31 +59,33 @@
 <p>Nenhuma solicitação cadastrada.</p>
 {% endif %}
 
-<h3>Comunicados Oficiais</h3>
+<h3>📢 Comunicados Oficiais</h3>
 
 {% if comunicados %}
 <table>
-    <tr>
-        <th>Título</th>
-        <th>Mensagem</th>
-        <th>Data</th>
-    </tr>
-    {% for c in comunicados %}
-    <tr>
-        <td>{{ c.titulo }}</td>
-        <td>{{ c.mensagem }}</td>
-        <td>
-            {% if c.data %}
-                {{ c.data.strftime('%d/%m/%Y %H:%M') }}
-            {% endif %}
-        </td>
-    </tr>
-    {% endfor %}
+    <thead>
+        <tr>
+            <th>Título</th>
+            <th>Mensagem</th>
+            <th>Data</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for c in comunicados %}
+        <tr>
+            <td>{{ c.titulo }}</td>
+            <td>{{ c.mensagem }}</td>
+            <td>
+                {% if c.data %}
+                    {{ c.data.strftime('%d/%m/%Y %H:%M') }}
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
 {% else %}
 <p>Nenhum comunicado publicado.</p>
-{% endif %}
-
 {% endif %}
 
 <!-- ================= ESCOLA ================= -->
