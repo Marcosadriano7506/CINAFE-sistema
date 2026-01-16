@@ -115,8 +115,18 @@ td {
     text-align: center;
 }
 
+/* IMAGEM INSTITUCIONAL (BANNER) */
+.banner {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
 .banner img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 8px;
+    width: 100%;
+    height: 160px;        /* 🔹 controla a “finesse” do banner */
+    object-fit: cover;   /* 🔹 corta sem distorcer */
+    object-position: center;
+    display: block;
+    border-radius: 0;
 }
