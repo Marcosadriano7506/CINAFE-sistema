@@ -124,7 +124,7 @@ td {
 
 .banner img {
     width: 100%;
-    height: 160px;        /* 🔹 controla a “finesse” do banner */
+    height: 100px;        /* 🔹 controla a “finesse” do banner */
     object-fit: cover;   /* 🔹 corta sem distorcer */
     object-position: center;
     display: block;
