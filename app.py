@@ -1,4 +1,6 @@
 from flask import Flask, render_template, request, redirect, session
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 import psycopg2
 import psycopg2.extras
 import os
@@ -181,28 +183,22 @@ def upload_to_drive(path, filename, solicitacao, escola):
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
+        username = request.form.get("username")
+        password = request.form.get("password")
 
         conn = get_db()
         cur = conn.cursor()
-
-        cur.execute("""
-            SELECT id, username, role
-            FROM users
-            WHERE username = %s
-            AND password = crypt(%s, password)
-        """, (username, password))
-
+        cur.execute("SELECT * FROM users WHERE username = %s", (username,))
         user = cur.fetchone()
         conn.close()
 
-        if user:
+        if user and check_password_hash(user["password"], password):
+            session.clear()
             session["user"] = user["username"]
             session["role"] = user["role"]
             return redirect("/dashboard")
 
-        return "Usuário ou senha inválidos"
+        return render_template("login.html", erro="Usuário ou senha inválidos")
 
     return render_template("login.html")
 
