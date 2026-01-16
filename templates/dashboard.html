@@ -16,48 +16,15 @@
     <img src="{{ url_for('static', filename='Apresentação1.jpg') }}" alt="CINAFE">
 </div>
 
-<p>
-    Usuário logado: <strong>{{ session.user }}</strong> |
+<p style="padding: 15px;">
+    Usuário logado: <strong>{{ session.user }}</strong>
+    |
     <a href="/logout">Sair</a>
 </p>
 
 <hr>
 
-<!-- ================= ADMIN ================= -->
-{% if session.get("role") == "admin" %}
-
-<h2>Painel da Secretaria</h2>
-
-<p>
-    <a href="/novo-comunicado" class="btn">📢 Novo Comunicado</a>
-    <a href="/nova-solicitacao" class="btn">📄 Nova Solicitação</a>
-    <a href="/criar-escola" class="btn red">➕ Cadastrar Escola</a>
-</p>
-
-<h3>Solicitações Criadas</h3>
-
-{% if solicitacoes %}
-<table>
-    <tr>
-        <th>Título</th>
-        <th>Descrição</th>
-        <th>Prazo</th>
-        <th>Ação</th>
-    </tr>
-    {% for s in solicitacoes %}
-    <tr>
-        <td>{{ s.titulo }}</td>
-        <td>{{ s.descricao }}</td>
-        <td>{{ s.prazo }}</td>
-        <td>
-            <a href="/controle/{{ s.id }}">📊 Controle</a>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
-{% else %}
-<p>Nenhuma solicitação cadastrada.</p>
-{% endif %}
+<!-- ================= COMUNICADOS (TODOS VEEM) ================= -->
 
 <h3>📢 Comunicados Oficiais</h3>
 
@@ -88,12 +55,52 @@
 <p>Nenhum comunicado publicado.</p>
 {% endif %}
 
-<!-- ================= ESCOLA ================= -->
-{% if session.get("role") == "escola" %}
+<hr>
+
+<!-- ================= PAINEL DA SECRETARIA ================= -->
+
+{% if role == "admin" %}
+
+<h2>Painel da Secretaria</h2>
+
+<p>
+    <a href="/novo-comunicado" class="btn">📢 Novo Comunicado</a>
+    <a href="/nova-solicitacao" class="btn">📄 Nova Solicitação</a>
+    <a href="/criar-escola" class="btn red">➕ Cadastrar Escola</a>
+</p>
+
+<h3>Solicitações Criadas</h3>
+
+{% if solicitacoes %}
+<table>
+    <tr>
+        <th>Título</th>
+        <th>Descrição</th>
+        <th>Prazo</th>
+        <th>Ações</th>
+    </tr>
+    {% for s in solicitacoes %}
+    <tr>
+        <td>{{ s.titulo }}</td>
+        <td>{{ s.descricao }}</td>
+        <td>{{ s.prazo }}</td>
+        <td>
+            <a href="/controle/{{ s.id }}">📊 Controle</a>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>Nenhuma solicitação cadastrada.</p>
+{% endif %}
+
+{% endif %}
+
+<!-- ================= PAINEL DA ESCOLA ================= -->
+
+{% if role == "escola" %}
 
 <h2>Painel da Escola</h2>
-
-<h3>Solicitações</h3>
 
 {% if solicitacoes %}
 <table>
