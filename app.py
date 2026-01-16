@@ -106,49 +106,71 @@ from googleapiclient.http import MediaFileUpload
 
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
-GOOGLE_TOKEN_JSON = os.environ.get("GOOGLE_TOKEN_JSON")
-
 PASTA_ANO = "2026"
 PASTA_SOLIC = "SOLICITACOES"
 
+GOOGLE_TOKEN_JSON = os.environ.get("GOOGLE_TOKEN_JSON")
 
 def get_drive_service():
     if not GOOGLE_TOKEN_JSON:
         raise Exception("Google Drive não autorizado pela secretaria.")
 
-    token_data = json.loads(GOOGLE_TOKEN_JSON)
-    creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+    token_info = json.loads(GOOGLE_TOKEN_JSON)
+
+    creds = Credentials.from_authorized_user_info(
+        token_info,
+        scopes=SCOPES
+    )
 
     return build("drive", "v3", credentials=creds)
 
+
 def get_or_create_folder(name, parent_id=None):
     drive = get_drive_service()
-    q = f"name='{name}' and mimeType='application/vnd.google-apps.folder'"
+
+    query = f"name='{name}' and mimeType='application/vnd.google-apps.folder'"
     if parent_id:
-        q += f" and '{parent_id}' in parents"
+        query += f" and '{parent_id}' in parents"
 
-    res = drive.files().list(q=q, fields="files(id,name)").execute()
-    if res["files"]:
-        return res["files"][0]["id"]
+    result = drive.files().list(
+        q=query,
+        fields="files(id,name)"
+    ).execute()
 
-    meta = {"name": name, "mimeType": "application/vnd.google-apps.folder"}
+    if result["files"]:
+        return result["files"][0]["id"]
+
+    metadata = {
+        "name": name,
+        "mimeType": "application/vnd.google-apps.folder"
+    }
+
     if parent_id:
-        meta["parents"] = [parent_id]
+        metadata["parents"] = [parent_id]
 
-    folder = drive.files().create(body=meta, fields="id").execute()
+    folder = drive.files().create(
+        body=metadata,
+        fields="id"
+    ).execute()
+
     return folder["id"]
+
 
 def upload_to_drive(path, filename, solicitacao, escola):
     drive = get_drive_service()
 
     ano_id = get_or_create_folder(PASTA_ANO)
-    solic_root = get_or_create_folder(PASTA_SOLIC, ano_id)
-    pasta_solic = get_or_create_folder(solicitacao, solic_root)
+    raiz_solic = get_or_create_folder(PASTA_SOLIC, ano_id)
+    pasta_solic = get_or_create_folder(solicitacao, raiz_solic)
     pasta_escola = get_or_create_folder(escola, pasta_solic)
 
     media = MediaFileUpload(path, resumable=False)
+
     file = drive.files().create(
-        body={"name": filename, "parents": [pasta_escola]},
+        body={
+            "name": filename,
+            "parents": [pasta_escola]
+        },
         media_body=media,
         fields="webViewLink"
     ).execute()
