@@ -63,41 +63,32 @@
 
     <h3>Comunicados Oficiais</h3>
 
-    {% if comunicados %}
-        <ul>
+{% if comunicados %}
+<table>
+    <thead>
+        <tr>
+            <th>Título</th>
+            <th>Mensagem</th>
+            <th>Data</th>
+        </tr>
+    </thead>
+    <tbody>
         {% for c in comunicados %}
-            <li>
-                <strong>{{ c.titulo }}</strong><br>
-                {{ c.mensagem }}<br>
-                <em>{{ c.data }}</em>
-            </li>
-            <br>
+        <tr>
+            <td>{{ c.titulo }}</td>
+            <td>{{ c.mensagem }}</td>
+            <td>
+                {% if c.data %}
+                    {{ c.data.strftime('%d/%m/%Y %H:%M') }}
+                {% endif %}
+            </td>
+        </tr>
         {% endfor %}
-        </ul>
-    {% else %}
-        <p>Nenhum comunicado publicado.</p>
-    {% endif %}
-
+    </tbody>
+</table>
 {% else %}
-
-    <h2>Painel da Escola</h2>
-
-    <h3>Comunicados Oficiais</h3>
-
-    {% if comunicados %}
-        <ul>
-        {% for c in comunicados %}
-            <li>
-                <strong>{{ c.titulo }}</strong><br>
-                {{ c.mensagem }}<br>
-                <em>{{ c.data }}</em>
-            </li>
-            <br>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p>Nenhum comunicado publicado.</p>
-    {% endif %}
+<p>Nenhum comunicado publicado.</p>
+{% endif %}
 
     <h3>Solicitações</h3>
 
