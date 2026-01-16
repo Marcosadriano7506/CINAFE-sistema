@@ -90,8 +90,7 @@
 <p>Nenhum comunicado publicado.</p>
 {% endif %}
 
-    {% if role == "escola" %}
-    
+{% if session.get("role") == "escola" %}
 <h3>Solicitações</h3>
 
 <table>
