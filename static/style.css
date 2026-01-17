@@ -118,15 +118,16 @@ td {
 /* IMAGEM INSTITUCIONAL (BANNER) */
 .banner {
     width: 100%;
-    margin: 0;
+    margin: 20px 0; /* Espaçamento em cima e embaixo para não colar no topo */
     padding: 0;
+    overflow: hidden;
 }
 
 .banner img {
-    width: 100%;
-    height: 100px;        /* 🔹 controla a “finesse” do banner */
-    object-fit: cover;   /* 🔹 corta sem distorcer */
-    object-position: center;
+    width: 100%;        /* Ocupa toda a largura disponível */
+    height: auto;       /* Mantém a proporção original, evitando cortes */
+    max-height: 150px;  /* Define um limite de altura para ficar "fina" */
+    object-fit: contain; /* Garante que a imagem inteira apareça no espaço */
     display: block;
-    border-radius: 0;
+    margin: 0 auto;
 }
