@@ -156,37 +156,31 @@ def upload_to_drive(path, filename, solicitacao, escola):
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form.get("username")
+        username = request.form.get("username").lower()
         password = request.form.get("password")
 
-        try:
-            conn = get_db()
-            cur = conn.cursor()
+        conn = get_db()
+        cur = conn.cursor()
 
-            cur.execute(
-                "SELECT username, role FROM users WHERE username = %s AND password = %s",
-                (username, password)
-            )
+        cur.execute("""
+            SELECT username, role
+            FROM users
+            WHERE username = %s
+              AND password = crypt(%s, password)
+        """, (username, password))
 
-            user = cur.fetchone()
-            conn.close()
+        user = cur.fetchone()
+        conn.close()
 
-            if user:
-                session.clear()
-                session["user"] = user["username"]
-                session["role"] = user["role"]
-                return redirect("/dashboard")
+        if user:
+            session.clear()
+            session["user"] = user["username"]
+            session["role"] = user["role"]
+            return redirect("/dashboard")
 
-            return render_template(
-                "login.html",
-                erro="Usuário ou senha inválidos"
-            )
-
-        except Exception as e:
-            return f"<pre>ERRO LOGIN:\n{str(e)}</pre>", 500
+        return render_template("login.html", erro="Usuário ou senha inválidos")
 
     return render_template("login.html")
-
 
 @app.route("/logout")
 def logout():
