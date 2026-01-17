@@ -261,8 +261,8 @@ def criar_escola():
         )
 
         cur.execute(
-            "INSERT INTO users (username,password,role) VALUES (%s,%s,%s)",
-            (codigo, generate_password_hash(senha), "escola")
+    "INSERT INTO users (username, password, role) VALUES (%s, crypt(%s, gen_salt('bf')), %s)",
+    (codigo, senha, "escola")
         )
 
         conn.commit()
@@ -358,3 +358,59 @@ def enviar(id):
 
     conn.close()
     return render_template("enviar.html", solicitacao=solicitacao)
+
+@app.route("/controle/<int:id>")
+def controle(id):
+    if session.get("role") != "admin":
+        return redirect("/dashboard")
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM solicitacoes WHERE id=%s", (id,))
+    solicitacao = cur.fetchone()
+
+    cur.execute("SELECT codigo FROM escolas")
+    escolas = cur.fetchall()
+
+    cur.execute("SELECT * FROM envios WHERE solicitacao_id=%s", (id,))
+    envios = cur.fetchall()
+
+    envios_map = {e["escola"]: e for e in envios}
+
+    resultado = []
+
+    hoje = datetime.now().date()
+    prazo = solicitacao["prazo"]
+
+    for e in escolas:
+        codigo = e["codigo"]
+        envio = envios_map.get(codigo)
+
+        if envio:
+            data_envio = envio["data_envio"].date()
+            if data_envio <= prazo:
+                status = "🟢 Enviado"
+            else:
+                status = "🔴 Fora do prazo"
+            link = envio["link_drive"]
+        else:
+            if hoje <= prazo:
+                status = "🟡 Pendente"
+            else:
+                status = "🔴 Em atraso"
+            link = None
+
+        resultado.append({
+            "escola": codigo,
+            "status": status,
+            "link": link
+        })
+
+    conn.close()
+
+    return render_template(
+        "controle.html",
+        solicitacao=solicitacao,
+        resultado=resultado
+    )
