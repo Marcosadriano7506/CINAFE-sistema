@@ -126,7 +126,7 @@ td {
 .banner img {
     width: 100%;        /* Ocupa toda a largura disponível */
     height: auto;       /* Mantém a proporção original, evitando cortes */
-    max-height: 150px;  /* Define um limite de altura para ficar "fina" */
+    max-height: 100px;  /* Define um limite de altura para ficar "fina" */
     object-fit: contain; /* Garante que a imagem inteira apareça no espaço */
     display: block;
     margin: 0 auto;
